@@ -1,0 +1,38 @@
+# Wisdom Agent - Docker Compose Configuration
+# PostgreSQL + pgvector for Week 2+
+
+version: '3.8'
+
+services:
+  postgres:
+    image: ankane/pgvector:latest
+    container_name: wisdom-agent-db
+    environment:
+      POSTGRES_USER: ${DB_USER:-wisdom_agent}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-wisdom_dev_pass}
+      POSTGRES_DB: ${DB_NAME:-wisdom_agent_db}
+      # Enable pgvector extension
+      POSTGRES_INITDB_ARGS: "-E UTF8"
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      # Persist database data
+      - postgres_data:/var/lib/postgresql/data
+      # Init scripts (if needed)
+      - ./backend/database/init_db.sql:/docker-entrypoint-initdb.d/init_db.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-wisdom_agent}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - wisdom-net
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  wisdom-net:
+    driver: bridge
