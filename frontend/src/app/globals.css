@@ -1,0 +1,249 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Import Google Fonts */
+@import url('https://fonts.googleapis.com/css2?family=Crimson+Pro:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Inter:wght@400;500;600;700&display=swap');
+
+:root {
+  /* Font families */
+  --font-geist-sans: 'Inter', system-ui, sans-serif;
+  --font-crimson: 'Crimson Pro', Georgia, serif;
+  --font-geist-mono: 'JetBrains Mono', monospace;
+  
+  /* Custom properties for theming */
+  --color-background: theme('colors.stone.50');
+  --color-foreground: theme('colors.stone.900');
+  --color-muted: theme('colors.stone.500');
+  --color-border: theme('colors.stone.200');
+  --color-accent: theme('colors.wisdom.600');
+  --color-accent-soft: theme('colors.wisdom.100');
+}
+
+/* Dark mode colors */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-background: theme('colors.stone.950');
+    --color-foreground: theme('colors.stone.100');
+    --color-muted: theme('colors.stone.400');
+    --color-border: theme('colors.stone.800');
+    --color-accent: theme('colors.wisdom.400');
+    --color-accent-soft: theme('colors.wisdom.900');
+  }
+}
+
+/* Base styles */
+@layer base {
+  html {
+    @apply antialiased;
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+  }
+
+  body {
+    @apply bg-stone-50 text-stone-900 font-sans;
+    @apply dark:bg-stone-950 dark:text-stone-100;
+  }
+
+  /* Headings use serif font for wisdom/philosophical feel */
+  h1, h2, h3 {
+    @apply font-serif font-medium tracking-tight;
+  }
+
+  h1 {
+    @apply text-4xl md:text-5xl;
+  }
+
+  h2 {
+    @apply text-2xl md:text-3xl;
+  }
+
+  h3 {
+    @apply text-xl md:text-2xl;
+  }
+
+  /* Links */
+  a {
+    @apply text-wisdom-600 dark:text-wisdom-400 hover:underline underline-offset-2;
+  }
+
+  /* Focus states */
+  :focus-visible {
+    @apply outline-none ring-2 ring-wisdom-500 ring-offset-2 ring-offset-stone-50;
+    @apply dark:ring-offset-stone-950;
+  }
+
+  /* Selection */
+  ::selection {
+    @apply bg-wisdom-200 dark:bg-wisdom-800;
+  }
+}
+
+/* Component styles */
+@layer components {
+  /* Card component */
+  .card {
+    @apply bg-white dark:bg-stone-900 rounded-xl shadow-soft;
+    @apply border border-stone-100 dark:border-stone-800;
+  }
+
+  /* Button base */
+  .btn {
+    @apply inline-flex items-center justify-center gap-2;
+    @apply px-4 py-2.5 rounded-lg font-medium text-sm;
+    @apply transition-all duration-200 ease-out;
+    @apply focus:outline-none focus-visible:ring-2 focus-visible:ring-wisdom-500 focus-visible:ring-offset-2;
+  }
+
+  .btn-primary {
+    @apply btn bg-wisdom-600 text-white;
+    @apply hover:bg-wisdom-700 active:bg-wisdom-800;
+    @apply dark:bg-wisdom-500 dark:hover:bg-wisdom-600;
+  }
+
+  .btn-secondary {
+    @apply btn bg-stone-100 text-stone-700;
+    @apply hover:bg-stone-200 active:bg-stone-300;
+    @apply dark:bg-stone-800 dark:text-stone-200 dark:hover:bg-stone-700;
+  }
+
+  .btn-ghost {
+    @apply btn bg-transparent text-stone-600;
+    @apply hover:bg-stone-100 dark:text-stone-300 dark:hover:bg-stone-800;
+  }
+
+  /* Input styles */
+  .input {
+    @apply w-full px-4 py-3 rounded-lg;
+    @apply bg-white dark:bg-stone-900;
+    @apply border border-stone-200 dark:border-stone-700;
+    @apply text-stone-900 dark:text-stone-100;
+    @apply placeholder:text-stone-400 dark:placeholder:text-stone-500;
+    @apply focus:outline-none focus:ring-2 focus:ring-wisdom-500 focus:border-transparent;
+    @apply transition-all duration-200;
+  }
+
+  .input-large {
+    @apply input text-lg py-4;
+  }
+
+  /* Message bubbles */
+  .message {
+    @apply rounded-2xl px-5 py-4;
+    @apply animate-fade-in;
+  }
+
+  .message-user {
+    @apply message bg-wisdom-600 text-white;
+    @apply ml-auto max-w-[85%];
+  }
+
+  .message-assistant {
+    @apply message bg-white dark:bg-stone-800;
+    @apply border border-stone-100 dark:border-stone-700;
+    @apply mr-auto max-w-[85%];
+  }
+
+  /* Sidebar */
+  .sidebar {
+    @apply h-full w-72 flex-shrink-0;
+    @apply bg-stone-100 dark:bg-stone-900;
+    @apply border-r border-stone-200 dark:border-stone-800;
+  }
+
+  /* Navigation item */
+  .nav-item {
+    @apply flex items-center gap-3 px-4 py-3 rounded-lg;
+    @apply text-stone-600 dark:text-stone-300;
+    @apply hover:bg-stone-200 dark:hover:bg-stone-800;
+    @apply transition-colors duration-150;
+  }
+
+  .nav-item-active {
+    @apply nav-item bg-wisdom-100 dark:bg-wisdom-900/30;
+    @apply text-wisdom-700 dark:text-wisdom-300;
+  }
+}
+
+/* Utility classes */
+@layer utilities {
+  /* Smooth scrolling */
+  .scroll-smooth {
+    scroll-behavior: smooth;
+  }
+
+  /* Hide scrollbar but allow scrolling */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Text balance */
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  /* Gradient backgrounds */
+  .bg-gradient-wisdom {
+    @apply bg-gradient-to-br from-wisdom-50 to-wisdom-100;
+    @apply dark:from-wisdom-950 dark:to-stone-950;
+  }
+
+  /* Subtle pattern background */
+  .bg-pattern {
+    background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%239C92AC' fill-opacity='0.03'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+  }
+}
+
+/* Animations */
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-5px);
+  }
+}
+
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}
+
+/* Prose styles for chat messages */
+.prose-chat {
+  @apply text-base leading-relaxed;
+}
+
+.prose-chat p {
+  @apply mb-3 last:mb-0;
+}
+
+.prose-chat ul, .prose-chat ol {
+  @apply my-3 pl-5;
+}
+
+.prose-chat li {
+  @apply mb-1.5;
+}
+
+.prose-chat code {
+  @apply px-1.5 py-0.5 rounded bg-stone-100 dark:bg-stone-800;
+  @apply font-mono text-sm;
+}
+
+.prose-chat pre {
+  @apply my-3 p-4 rounded-lg overflow-x-auto;
+  @apply bg-stone-900 dark:bg-stone-950 text-stone-100;
+}
+
+.prose-chat pre code {
+  @apply bg-transparent p-0;
+}
+
+.prose-chat blockquote {
+  @apply pl-4 border-l-3 border-wisdom-300 dark:border-wisdom-700;
+  @apply italic text-stone-600 dark:text-stone-400;
+}

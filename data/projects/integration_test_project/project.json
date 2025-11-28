@@ -1,0 +1,28 @@
+{
+  "name": "Integration Test Project",
+  "type": "learning",
+  "description": "Testing Day 6-7 integration",
+  "created": "2025-11-22T17:32:32.697996",
+  "last_updated": "2025-11-22T17:32:32.953005",
+  "sessions": [],
+  "resources": [],
+  "journal_entries": [
+    {
+      "type": "reflection",
+      "content": "Started integration testing today!",
+      "timestamp": "2025-11-22T17:32:32.868319"
+    }
+  ],
+  "learning_plan": {
+    "goal": "Verify all endpoints work",
+    "status": "planning",
+    "milestones": [],
+    "created": "2025-11-22T17:32:32.699059"
+  },
+  "progress": {
+    "tests_passed": {
+      "value": 4,
+      "updated": "2025-11-22T17:32:32.953003"
+    }
+  }
+}
