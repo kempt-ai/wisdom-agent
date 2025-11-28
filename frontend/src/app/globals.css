@@ -244,6 +244,6 @@
 }
 
 .prose-chat blockquote {
-  @apply pl-4 border-l-3 border-wisdom-300 dark:border-wisdom-700;
+  @apply pl-4 border-l-4 border-wisdom-300 dark:border-wisdom-700;
   @apply italic text-stone-600 dark:text-stone-400;
 }
