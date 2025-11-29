@@ -23,14 +23,35 @@ export default function SettingsPage() {
     loadSettings();
   }, []);
 
+  // Helper to normalize providers response (handles both array and object formats)
+  const normalizeProviders = (data: any): Provider[] => {
+    if (!data) return [];
+    if (Array.isArray(data)) return data;
+    if (data.providers && Array.isArray(data.providers)) return data.providers;
+    // If it's an object with provider names as keys
+    if (typeof data === 'object') {
+      return Object.entries(data).map(([id, value]: [string, any]) => ({
+        id,
+        name: value.name || id,
+        enabled: value.enabled || value.active || false,
+        model: value.model || value.default_model || 'Unknown',
+        api_key_set: value.api_key_set ?? value.has_key ?? true,
+      }));
+    }
+    return [];
+  };
+
   const loadSettings = async () => {
     try {
       setIsLoading(true);
       const [providersData, healthData] = await Promise.all([
-        getProviders().catch(() => []),
+        getProviders().catch((err) => {
+          console.error('Failed to load providers:', err);
+          return [];
+        }),
         getHealth().catch(() => null),
       ]);
-      setProviders(providersData);
+      setProviders(normalizeProviders(providersData));
       setHealth(healthData);
     } catch (err) {
       console.error('Failed to load settings:', err);
@@ -46,7 +67,7 @@ export default function SettingsPage() {
       await setActiveProvider(providerId);
       // Reload providers to get updated state
       const updatedProviders = await getProviders();
-      setProviders(updatedProviders);
+      setProviders(normalizeProviders(updatedProviders));
     } catch (err) {
       console.error('Failed to activate provider:', err);
       setError(err instanceof Error ? err.message : 'Failed to activate provider');
@@ -55,7 +76,7 @@ export default function SettingsPage() {
     }
   };
 
-  const activeProvider = providers.find((p) => p.enabled);
+  const activeProvider = Array.isArray(providers) ? providers.find((p) => p.enabled) : null;
 
   return (
     <div className="h-full flex flex-col bg-stone-50 dark:bg-stone-950">
@@ -93,7 +114,7 @@ export default function SettingsPage() {
                           Backend Connected
                         </p>
                         <p className="text-sm text-stone-500 dark:text-stone-400">
-                          Version {health.version}
+                          Version {health.version || '0.1.0'}
                         </p>
                       </div>
                     </div>
@@ -133,7 +154,7 @@ export default function SettingsPage() {
                 </div>
               )}
 
-              {providers.length === 0 ? (
+              {!providers || providers.length === 0 ? (
                 <div className="card p-6 text-center">
                   <p className="text-stone-500 dark:text-stone-400">
                     No LLM providers configured. Add API keys to your .env file.
