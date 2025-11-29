@@ -10,10 +10,25 @@ import {
   Server,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { getProviders, setActiveProvider, getHealth, type Provider, type HealthResponse } from '@/lib/api';
+import { getProviders, setActiveProvider, getHealth, type HealthResponse } from '@/lib/api';
+
+interface ProviderDetails {
+  name: string;
+  model: string;
+  enabled: boolean;
+  available: boolean;
+  max_tokens: number;
+}
+
+interface ProvidersResponse {
+  active: string;
+  available: string[];
+  configured: string[];
+  details: Record<string, ProviderDetails>;
+}
 
 export default function SettingsPage() {
-  const [providers, setProviders] = useState<Provider[]>([]);
+  const [providersData, setProvidersData] = useState<ProvidersResponse | null>(null);
   const [health, setHealth] = useState<HealthResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [activatingProvider, setActivatingProvider] = useState<string | null>(null);
@@ -23,35 +38,17 @@ export default function SettingsPage() {
     loadSettings();
   }, []);
 
-  // Helper to normalize providers response (handles both array and object formats)
-  const normalizeProviders = (data: any): Provider[] => {
-    if (!data) return [];
-    if (Array.isArray(data)) return data;
-    if (data.providers && Array.isArray(data.providers)) return data.providers;
-    // If it's an object with provider names as keys
-    if (typeof data === 'object') {
-      return Object.entries(data).map(([id, value]: [string, any]) => ({
-        id,
-        name: value.name || id,
-        enabled: value.enabled || value.active || false,
-        model: value.model || value.default_model || 'Unknown',
-        api_key_set: value.api_key_set ?? value.has_key ?? true,
-      }));
-    }
-    return [];
-  };
-
   const loadSettings = async () => {
     try {
       setIsLoading(true);
-      const [providersData, healthData] = await Promise.all([
+      const [provData, healthData] = await Promise.all([
         getProviders().catch((err) => {
           console.error('Failed to load providers:', err);
-          return [];
+          return null;
         }),
         getHealth().catch(() => null),
       ]);
-      setProviders(normalizeProviders(providersData));
+      setProvidersData(provData as ProvidersResponse);
       setHealth(healthData);
     } catch (err) {
       console.error('Failed to load settings:', err);
@@ -67,7 +64,7 @@ export default function SettingsPage() {
       await setActiveProvider(providerId);
       // Reload providers to get updated state
       const updatedProviders = await getProviders();
-      setProviders(normalizeProviders(updatedProviders));
+      setProvidersData(updatedProviders as ProvidersResponse);
     } catch (err) {
       console.error('Failed to activate provider:', err);
       setError(err instanceof Error ? err.message : 'Failed to activate provider');
@@ -76,7 +73,17 @@ export default function SettingsPage() {
     }
   };
 
-  const activeProvider = Array.isArray(providers) ? providers.find((p) => p.enabled) : null;
+  // Get providers list from the details object
+  const providers = providersData?.details 
+    ? Object.entries(providersData.details).map(([id, details]) => ({
+        id,
+        name: details.name,
+        model: details.model,
+        enabled: id === providersData.active,
+        available: details.available,
+        api_key_set: providersData.configured.includes(id),
+      }))
+    : [];
 
   return (
     <div className="h-full flex flex-col bg-stone-50 dark:bg-stone-950">
@@ -108,7 +115,7 @@ export default function SettingsPage() {
                 {health ? (
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-4">
-                      <div className="w-3 h-3 rounded-full bg-sage-500 animate-pulse" />
+                      <div className="w-3 h-3 rounded-full bg-green-500 animate-pulse" />
                       <div>
                         <p className="font-medium text-stone-800 dark:text-stone-200">
                           Backend Connected
@@ -118,7 +125,7 @@ export default function SettingsPage() {
                         </p>
                       </div>
                     </div>
-                    <span className="text-sm text-sage-600 dark:text-sage-400">
+                    <span className="text-sm text-green-600 dark:text-green-400">
                       {health.status}
                     </span>
                   </div>
@@ -154,7 +161,7 @@ export default function SettingsPage() {
                 </div>
               )}
 
-              {!providers || providers.length === 0 ? (
+              {providers.length === 0 ? (
                 <div className="card p-6 text-center">
                   <p className="text-stone-500 dark:text-stone-400">
                     No LLM providers configured. Add API keys to your .env file.
@@ -190,7 +197,7 @@ export default function SettingsPage() {
                           />
                         </div>
                         <div>
-                          <p className="font-medium text-stone-800 dark:text-stone-200">
+                          <p className="font-medium text-stone-800 dark:text-stone-200 capitalize">
                             {provider.name}
                           </p>
                           <p className="text-sm text-stone-500 dark:text-stone-400">
@@ -200,9 +207,9 @@ export default function SettingsPage() {
                       </div>
 
                       <div className="flex items-center gap-3">
-                        {!provider.api_key_set && (
+                        {!provider.available && (
                           <span className="px-2 py-1 rounded-full text-xs bg-stone-100 dark:bg-stone-800 text-stone-500">
-                            No API key
+                            Not available
                           </span>
                         )}
                         {provider.enabled ? (
@@ -213,10 +220,10 @@ export default function SettingsPage() {
                         ) : (
                           <button
                             onClick={() => handleActivateProvider(provider.id)}
-                            disabled={!provider.api_key_set || activatingProvider === provider.id}
+                            disabled={!provider.available || activatingProvider === provider.id}
                             className={cn(
                               'px-3 py-1.5 rounded-lg text-sm transition-colors',
-                              provider.api_key_set
+                              provider.available
                                 ? 'bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-300 hover:bg-stone-200 dark:hover:bg-stone-700'
                                 : 'bg-stone-50 dark:bg-stone-900 text-stone-400 cursor-not-allowed'
                             )}
@@ -235,7 +242,7 @@ export default function SettingsPage() {
               )}
 
               <p className="mt-4 text-sm text-stone-500 dark:text-stone-400">
-                To add or configure providers, update your backend .env file with the appropriate API keys.
+                Active provider: <span className="font-medium capitalize">{providersData?.active || 'None'}</span>
               </p>
             </section>
 
