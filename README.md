@@ -1,408 +1,162 @@
-# Wisdom Agent
+# Wisdom Agent - Week 3 Day 3 Updates
 
-An AI system designed to help individuals and groups grow in wisdom.
+These files contain the Day 3 updates for the Wisdom Agent project.
 
-## Philosophy
+## What's New
 
-Grounded in **Something Deeperism**:
-- Poetic (not literal) relation to Truth
-- Pure Love = Reality, chooses everyone
-- 7 Universal Values for self-evaluation
+### 1. Auto-Initialize Services on Startup
+**File:** `backend/main.py`
 
-### The 7 Universal Values
+Services now automatically initialize when the server starts:
+- LLM Router
+- Memory Service (ChromaDB)
+- Reflection Service
+- Pedagogy Service (if available)
+- Conversation Service (NEW)
 
-| Value | Description |
-|-------|-------------|
-| **Awareness** | Staying present to what's actually happening |
-| **Honesty** | Truth-telling even when difficult |
-| **Accuracy** | Precision in understanding and communication |
-| **Competence** | Doing things well and skillfully |
-| **Compassion** | Meeting all beings and their suffering with care |
-| **Loving-kindness** | Active goodwill toward everyone |
-| **Joyful-sharing** | Generosity and celebration of the good |
+No more manual `curl` commands needed!
 
-## Core Questions
+### 2. Conversation Service (NEW)
+**File:** `backend/services/conversation_service.py`
 
-1. **How can AI best help humans select for wisdom?**
-2. **How can AI pursue this without overstepping?**
+This new service handles:
+- Session creation and management
+- Message storage and retrieval
+- Summary generation
+- 7 Values reflection generation
+- Persistent storage to disk
 
-## Quick Start
+This was the missing piece that caused "Service not initialized" errors.
 
-### Option 1: Without Database (Simpler)
+### 3. Fixed API Endpoints
+**File:** `frontend/src/lib/api.ts`
+
+The original api.ts was missing `/api` prefix on all endpoints. Now includes:
+- Fixed endpoint paths (e.g., `/api/chat/complete` not `/chat/complete`)
+- New session management functions (`startSession`, `endSession`, etc.)
+- Proper TypeScript types for all responses
+
+### 4. End Session Button with Report
+**File:** `frontend/src/components/ChatInterface.tsx`
+
+New features:
+- "End Session" button appears after first message
+- Confirmation modal before ending
+- Automatically saves conversation
+- Generates summary and 7 Values reflection
+- Shows beautiful report modal with:
+  - Session summary
+  - 7 Universal Values scores with progress bars
+  - Overall score
+
+### 5. Fixed Nebius Configuration
+**Files:** `backend/config.py`, `backend/services/llm_router.py`
+
+- Updated base URL to `https://api.studio.nebius.com/v1`
+- Fixed model names to current format (e.g., `meta-llama/Llama-3.3-70B-Instruct`)
+- Added more available models including DeepSeek and Qwen
+
+## How to Apply These Updates
+
+### Step 1: Copy the files to your project
+
+Replace these files in your `wisdom-agent` directory:
 
 ```bash
-# 1. Copy environment file and add your API keys
-cp .env.example .env
-# Edit .env to add your ANTHROPIC_API_KEY
+# From the downloaded folder, copy to your project:
 
-# 2. Install dependencies
-pip install -r requirements.txt
+# Backend files
+cp backend/main.py /path/to/wisdom-agent/backend/main.py
+cp backend/config.py /path/to/wisdom-agent/backend/config.py
+cp backend/services/conversation_service.py /path/to/wisdom-agent/backend/services/conversation_service.py
+cp backend/services/llm_router.py /path/to/wisdom-agent/backend/services/llm_router.py
 
-# 3. Run the server
-python -m uvicorn backend.main:app --reload
+# Frontend files
+cp frontend/src/lib/api.ts /path/to/wisdom-agent/frontend/src/lib/api.ts
+cp frontend/src/components/ChatInterface.tsx /path/to/wisdom-agent/frontend/src/components/ChatInterface.tsx
 ```
 
-### Option 2: With Database (Full Setup)
+Or drag and drop the files into the appropriate folders.
+
+### Step 2: Restart the servers
 
 ```bash
-# 1. Start PostgreSQL with pgvector
-docker-compose up -d
-
-# 2. Copy environment file and configure
-cp .env.example .env
-# Edit .env to add your ANTHROPIC_API_KEY and database settings
-
-# 3. Install dependencies
-pip install -r requirements.txt
-
-# 4. Initialize database
-python -m backend.database.setup_db
-
-# 5. Run the server
+# Terminal 1 - Stop backend (Ctrl+C) and restart
+cd wisdom-agent
 python -m uvicorn backend.main:app --reload
+
+# Terminal 2 - Stop frontend (Ctrl+C) and restart  
+cd wisdom-agent/frontend
+npm run dev
 ```
 
-Visit:
-- **http://localhost:8000** - Health check
-- **http://localhost:8000/docs** - Swagger UI (interactive API docs)
-- **http://localhost:8000/redoc** - ReDoc (alternative docs)
+### Step 3: Verify services initialized
 
-**Note:** The database is optional for Week 1 features. The system will use ChromaDB for memory if PostgreSQL is not configured.
+Check the backend output - you should see:
+```
+Initializing Services...
+✓ LLM Router initialized
+✓ Memory Service initialized (ChromaDB)
+✓ Reflection Service initialized
+✓ Conversation Service initialized
+```
 
-## Project Structure
+### Step 4: Test the End Session feature
+
+1. Go to http://localhost:3000
+2. Click on "Chat" in the sidebar
+3. Send a few messages
+4. Click the "End Session" button (appears after first message)
+5. Confirm in the modal
+6. See your session report with 7 Values scores!
+
+## Files Structure
 
 ```
-wisdom-agent/
+wisdom-agent-day3-updates/
 ├── backend/
-│   ├── main.py              # FastAPI entry point
-│   ├── config.py            # Configuration management
-│   ├── services/            # Business logic
-│   │   ├── philosophy_loader.py  # Layered philosophy system
-│   │   ├── llm_router.py         # Multi-LLM provider support
-│   │   ├── memory_service.py     # Vector DB (ChromaDB)
-│   │   ├── project_service.py    # Learning projects
-│   │   ├── file_service.py       # File uploads/downloads
-│   │   ├── pedagogy_service.py   # Learning plans & progress
-│   │   └── reflection_service.py # 7 Values self-evaluation
-│   ├── routers/             # API endpoints
-│   │   ├── chat.py          # LLM interactions
-│   │   ├── memory.py        # Semantic search
-│   │   ├── projects.py      # Project CRUD
-│   │   ├── files.py         # File management
-│   │   ├── pedagogy.py      # Learning tools
-│   │   └── reflection.py    # Self-reflection system
-│   ├── models/              # Pydantic models (future)
-│   └── database/            # PostgreSQL (Week 2)
-├── data/
-│   ├── philosophy/
-│   │   ├── base/            # Something Deeperism core files
-│   │   ├── domains/         # democracy/, corporate/, etc.
-│   │   └── organizations/   # Org-specific values
-│   ├── conversations/       # Session artifacts
-│   ├── projects/            # Learning projects
-│   ├── uploads/             # User uploads
-│   ├── exports/             # Generated exports
-│   └── memory/vector_db/    # ChromaDB storage
-├── config/
-│   └── llm_providers.json   # LLM configuration
-├── requirements.txt
-└── .env.example
+│   ├── main.py                          # Updated with auto-init
+│   ├── config.py                        # Fixed Nebius URL
+│   └── services/
+│       ├── conversation_service.py      # NEW - Session management
+│       └── llm_router.py                # Fixed Nebius models
+└── frontend/
+    └── src/
+        ├── lib/
+        │   └── api.ts                   # Fixed API endpoints
+        └── components/
+            └── ChatInterface.tsx        # End Session button + report
 ```
 
-## API Reference
+## Troubleshooting
 
-### Health & Info
+### Services still showing "not initialized"
+- Make sure you've replaced ALL the files listed above
+- Restart the backend server completely (not just hot reload)
+- Check the terminal output for any error messages
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/` | GET | Basic health check |
-| `/health` | GET | Detailed service status |
-| `/philosophy` | GET | Philosophy files info |
+### Nebius still gives 404 error
+- Delete `config/llm_providers.json` to reset to new defaults
+- The file will be recreated with correct model names
 
-### Chat API (`/api/chat/`)
+### End Session button not appearing
+- Make sure you replaced the ChatInterface.tsx file
+- Restart the frontend server
+- Clear your browser cache
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/providers` | GET | List LLM providers |
-| `/providers/{provider}/activate` | POST | Switch active provider |
-| `/complete` | POST | Raw LLM completion |
-| `/ask` | POST | Philosophy-grounded question |
+## Git Commit
 
-### Memory API (`/api/memory/`)
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/status` | GET | Memory service status |
-| `/initialize` | POST | Initialize embedding model |
-| `/search` | POST | Semantic similarity search |
-| `/store` | POST | Store content with embeddings |
-| `/stats` | GET | Database statistics |
-| `/projects` | GET | List projects in memory |
-
-### Projects API (`/api/projects/`)
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/` | GET | List all projects |
-| `/` | POST | Create new project |
-| `/{name}` | GET | Get project details |
-| `/{name}` | DELETE | Delete project |
-| `/{name}/sessions` | GET/POST | Session management |
-| `/{name}/resources` | GET/POST | Resource management |
-| `/{name}/journal` | GET/POST | Journal entries |
-| `/{name}/progress` | GET/POST | Progress tracking |
-| `/{name}/outline` | GET | Full project outline |
-| `/{name}/learning-plan` | GET/PUT | Learning plan management |
-
-### Files API (`/api/files/`)
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/status` | GET | Service status & capabilities |
-| `/stats` | GET | File statistics |
-| `/upload` | POST | Upload file |
-| `/uploads` | GET | List uploaded files |
-| `/download` | GET | Download file |
-| `/extract-text` | POST | Extract text from PDF/DOCX |
-| `/project/{name}` | GET | List project files |
-
-### Pedagogy API (`/api/pedagogy/`)
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/status` | GET | Service status |
-| `/initialize` | POST | Initialize service |
-| `/learning-plan` | POST | Generate personalized learning plan |
-| `/detect-session-type` | POST | Classify session type |
-| `/pedagogical-reflection` | POST | Reflect on learning session |
-| `/progress-update` | POST | Generate progress assessment |
-| `/suggest-next-topics` | POST | Suggest next study topics |
-
-### Reflection API (`/api/reflection/`)
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/status` | GET | Service status |
-| `/initialize` | POST | Initialize service |
-| `/values` | GET | Get 7 Universal Values info |
-| `/values-reflection` | POST | **Generate 7 Values self-evaluation** |
-| `/session-summary` | POST | Generate session summary |
-| `/save-artifacts` | POST | Save session files |
-| `/meta-summary` | GET | Get evolving meta-summary |
-| `/meta-summary/update` | POST | Update meta-summary |
-| `/recent-summaries` | GET | Get recent summaries |
-| `/values-trend` | GET | Analyze values trend |
-| `/complete-session` | POST | **Full session workflow (all-in-one)** |
-
-## Usage Examples
-
-### Initialize Services
-
+After applying updates:
 ```bash
-# Initialize LLM-dependent services
-curl -X POST http://localhost:8000/api/pedagogy/initialize
-curl -X POST http://localhost:8000/api/reflection/initialize
+cd wisdom-agent
+git add .
+git commit -m "Week 3 Day 3: Auto-init services, End Session button, Conversation service"
+git push
 ```
 
-### Create a Learning Project
+## Next Steps (Day 4+)
 
-```bash
-curl -X POST http://localhost:8000/api/projects/ \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "Learn Spanish",
-    "project_type": "learning",
-    "description": "Improve my Spanish",
-    "learning_goal": "Conversational fluency"
-  }'
-```
-
-### Generate a Learning Plan
-
-```bash
-curl -X POST http://localhost:8000/api/pedagogy/learning-plan \
-  -H "Content-Type: application/json" \
-  -d '{
-    "subject": "Spanish Language",
-    "current_level": "Complete beginner",
-    "learning_goal": "Hold basic conversations",
-    "time_commitment": "30 minutes per day"
-  }'
-```
-
-### Generate 7 Universal Values Reflection
-
-```bash
-curl -X POST http://localhost:8000/api/reflection/values-reflection \
-  -H "Content-Type: application/json" \
-  -d '{
-    "session_id": 1,
-    "messages": [
-      {"role": "user", "content": "What is wisdom?"},
-      {"role": "assistant", "content": "Wisdom involves integrating knowledge with good judgment..."}
-    ]
-  }'
-```
-
-### Complete a Full Session
-
-```bash
-curl -X POST "http://localhost:8000/api/reflection/complete-session?session_id=1" \
-  -H "Content-Type: application/json" \
-  -d '[
-    {"role": "user", "content": "Hello, I want to explore what it means to live wisely."},
-    {"role": "assistant", "content": "That is a beautiful question to contemplate..."}
-  ]'
-```
-
-## Database (PostgreSQL + pgvector)
-
-**Status:** Week 2 - Foundation Complete
-
-The Wisdom Agent uses PostgreSQL with pgvector for:
-- User accounts & projects
-- Session data & conversations
-- Vector embeddings for semantic memory search
-- 7 Universal Values scoring and tracking
-
-### Quick Database Setup
-
-```bash
-# Start PostgreSQL
-docker-compose up -d
-
-# Initialize schema
-python -m backend.database.setup_db
-
-# Check status
-docker-compose ps
-```
-
-### Database Schema
-
-**Core Tables:**
-- `users` - User accounts (multi-user ready)
-- `projects` - Learning projects
-- `sessions` - Conversation sessions
-- `messages` - Chat messages
-- `session_summaries` - AI-generated summaries
-- `session_reflections` - 7 Values scoring
-
-**Memory Tables:**
-- `memories` - Vector embeddings (384-dimensional)
-
-**Future Tables:**
-- `claims`, `verifications`, `evidence` - Fact-checking
-- `reasoning_traces`, `evolution_log` - AI evolution tracking
-
-For detailed database documentation, see [`backend/database/README.md`](backend/database/README.md).
-
-### Hybrid Memory Service (Week 2 Day 2)
-
-The Wisdom Agent now features an intelligent hybrid memory system:
-
-**Primary Backend: PostgreSQL + pgvector**
-- Production-ready vector storage
-- Semantic similarity search with cosine distance
-- Scalable to millions of memories
-- Multi-user ready with isolation
-- Full ACID compliance
-
-**Fallback Backend: ChromaDB**
-- Development-friendly
-- No database setup required
-- Perfect for prototyping
-
-The system automatically selects the best available backend:
-1. If `DATABASE_URL` is configured → Uses PostgreSQL
-2. Otherwise → Falls back to ChromaDB
-
-**Test the memory system:**
-```bash
-# Initialize memory service
-curl -X POST http://localhost:8000/api/memory/initialize
-
-# Check which backend is active
-curl http://localhost:8000/api/memory/status
-```
-
-**Migrate from ChromaDB to PostgreSQL:**
-```bash
-python -m backend.database.migrate_chromadb --dry-run  # Test first
-python -m backend.database.migrate_chromadb           # Actual migration
-```
-
-See [`TESTING_GUIDE_DAY2.md`](TESTING_GUIDE_DAY2.md) for comprehensive testing instructions.
-
-### Database Configuration
-
-In `.env`:
-
-```bash
-DB_USER=wisdom_agent
-DB_PASSWORD=wisdom_dev_pass
-DB_HOST=localhost
-DB_PORT=5432
-DB_NAME=wisdom_agent_db
-```
-
-## LLM Providers
-
-Supported providers (configure in `.env`):
-
-| Provider | Required Env Var | Notes |
-|----------|-----------------|-------|
-| Anthropic | `ANTHROPIC_API_KEY` | Claude models (recommended) |
-| OpenAI | `OPENAI_API_KEY` | GPT-4 models |
-| Nebius | `NEBIUS_API_KEY` | Llama models |
-| Local | - | Ollama (localhost:11434) |
-
-## Optional Dependencies
-
-The memory service requires additional packages:
-
-```bash
-# For semantic memory features
-pip install sentence-transformers chromadb
-```
-
-The app will run without these, but memory/search features will be disabled.
-
-## Migration Status
-
-**Week 1 Complete:**
-- ✅ FastAPI backend structure
-- ✅ Configuration management
-- ✅ Philosophy loader with layered system
-- ✅ LLM Router (multi-provider)
-- ✅ Memory Service (ChromaDB)
-- ✅ Project Service (CRUD + learning plans)
-- ✅ File Service (upload/download/extract)
-- ✅ Pedagogy Service (learning plans, progress)
-- ✅ Reflection Service (7 Values self-evaluation)
-- ✅ All API endpoints functional
-- ✅ Integration tested
-
-**Week 2 Days 1-2 Complete:**
-- ✅ Day 1: Database foundation (PostgreSQL + pgvector setup, SQLAlchemy models)
-- ✅ Day 2: Hybrid memory service (PostgreSQL primary, ChromaDB fallback)
-- ✅ Day 2: Vector similarity search with pgvector
-- ✅ Day 2: Migration script (ChromaDB → PostgreSQL)
-- 🚧 Days 3-5: Session & conversation management, testing, integration
-
-**Coming Next:**
-- Days 3-5: Complete session/conversation migration to PostgreSQL
-- Week 3+: Next.js frontend
-- Future: User authentication, fact-checking features
-
-## Contributing
-
-This is an open-source project designed to help individuals and groups grow in wisdom. Contributions welcome!
-
-## License
-
-MIT License
-
----
-
-*"How can AI best help humans select for wisdom without overstepping?"*
+- File upload/download in chat
+- Migrate old Streamlit conversation data
+- Mobile responsiveness improvements
+- Enhanced reflections dashboard

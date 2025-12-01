@@ -4,7 +4,7 @@ LLM Router - Multi-Provider Support
 Routes LLM requests to configured providers (Anthropic, OpenAI, Nebius, Local).
 Allows users to configure and toggle between different LLM providers.
 
-Migrated from old wisdom-agent to use new config system.
+Updated: Week 3 Day 3 - Fixed Nebius model names
 """
 
 import json
@@ -57,7 +57,7 @@ class LLMRouter:
             with open(config.LLM_CONFIG_FILE, 'r') as f:
                 return json.load(f)
         
-        # Default configuration
+        # Default configuration (Updated Week 3 Day 3)
         return {
             'active_provider': 'anthropic',
             'providers': {
@@ -83,11 +83,18 @@ class LLMRouter:
                     'enabled': False,
                     'api_key_env': 'NEBIUS_API_KEY',
                     'base_url': config.NEBIUS_BASE_URL,
-                    'default_model': 'meta-llama/Meta-Llama-3.1-70B-Instruct',
+                    # Updated model name format (Week 3 Day 3)
+                    'default_model': 'meta-llama/Llama-3.3-70B-Instruct',
                     'max_tokens': config.DEFAULT_MAX_TOKENS,
+                    # Updated available models list
                     'available_models': [
-                        'meta-llama/Meta-Llama-3.1-70B-Instruct',
-                        'meta-llama/Meta-Llama-3.1-8B-Instruct',
+                        'meta-llama/Llama-3.3-70B-Instruct',
+                        'meta-llama/Llama-3.1-70B-Instruct',
+                        'meta-llama/Llama-3.1-8B-Instruct',
+                        'Qwen/Qwen2.5-72B-Instruct',
+                        'Qwen/Qwen2.5-32B-Instruct',
+                        'deepseek-ai/DeepSeek-V3',
+                        'deepseek-ai/DeepSeek-R1',
                         'mistralai/Mistral-7B-Instruct-v0.3',
                         'mistralai/Mixtral-8x7B-Instruct-v0.1'
                     ]
@@ -125,13 +132,16 @@ class LLMRouter:
             else:
                 print("⚠ Ollama library not installed")
         
-        # Nebius - auto-enable if key present
+        # Nebius - auto-enable if key present (Updated Week 3 Day 3)
         nebius_settings = providers.get('nebius', {})
         if config.NEBIUS_API_KEY and OpenAI is not None:
             if not nebius_settings.get('enabled'):
                 nebius_settings['enabled'] = True
                 self.provider_config['providers']['nebius'] = nebius_settings
-            base_url = nebius_settings.get('base_url', config.NEBIUS_BASE_URL)
+            
+            # Use the base URL from config
+            base_url = config.NEBIUS_BASE_URL
+            
             self.clients['nebius'] = OpenAI(
                 base_url=base_url,
                 api_key=config.NEBIUS_API_KEY
@@ -274,6 +284,15 @@ class LLMRouter:
             )
             return response.choices[0].message.content
         except Exception as e:
+            error_msg = str(e)
+            # Provide helpful error message for model not found
+            if "does not exist" in error_msg or "404" in error_msg:
+                available = self.get_nebius_models()
+                raise Exception(
+                    f"Nebius model '{model}' not found. "
+                    f"Try one of: {', '.join(available[:5])}... "
+                    f"Use set_nebius_model() to change."
+                )
             raise Exception(f"Nebius API error: {e}")
     
     def get_provider_info(self, provider: Optional[str] = None) -> Dict:
@@ -373,7 +392,7 @@ class LLMRouter:
         available = self.get_nebius_models()
         if available and model_name not in available:
             print(f"⚠ {model_name} not in configured model list")
-            print(f"Available: {', '.join(available)}")
+            print(f"Available: {', '.join(available[:10])}...")
         
         self.provider_config['providers']['nebius']['default_model'] = model_name
         self._save_config()

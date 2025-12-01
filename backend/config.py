@@ -2,6 +2,7 @@
 Wisdom Agent - Configuration Management
 
 Central configuration for all paths, settings, and environment variables.
+Updated: Week 3 Day 3 - Fixed Nebius configuration
 """
 
 import os
@@ -75,7 +76,13 @@ class Config:
     ANTHROPIC_API_KEY: Optional[str] = os.getenv("ANTHROPIC_API_KEY")
     OPENAI_API_KEY: Optional[str] = os.getenv("OPENAI_API_KEY")
     NEBIUS_API_KEY: Optional[str] = os.getenv("NEBIUS_API_KEY")
-    NEBIUS_BASE_URL: str = os.getenv("NEBIUS_BASE_URL", "https://api.tokenfactory.nebius.com/v1")
+    
+    # Nebius Configuration (Updated Week 3 Day 3)
+    # The API endpoint changed - now uses tokenfactory
+    NEBIUS_BASE_URL: str = os.getenv(
+        "NEBIUS_BASE_URL", 
+        "https://api.studio.nebius.com/v1"  # Updated URL
+    )
     
     # Server settings
     HOST: str = os.getenv("HOST", "0.0.0.0")

@@ -1,7 +1,6 @@
 /**
  * API client for communicating with the Wisdom Agent backend
- * 
- * Week 3 Day 2 - Fixed endpoint paths with /api prefix
+ * Updated: Week 3 Day 3 - Fixed endpoints, added session management
  */
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
@@ -13,32 +12,20 @@ async function fetchAPI<T>(
 ): Promise<T> {
   const url = `${API_BASE}${endpoint}`;
   
-  try {
-    const response = await fetch(url, {
-      ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        ...options.headers,
-      },
-    });
+  const response = await fetch(url, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
 
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({ detail: 'Unknown error' }));
-      throw new Error(error.detail || `API error: ${response.status}`);
-    }
-
-    // Handle empty responses (204 No Content)
-    if (response.status === 204) {
-      return {} as T;
-    }
-
-    return response.json();
-  } catch (error) {
-    if (error instanceof TypeError && error.message.includes('fetch')) {
-      throw new Error('Cannot connect to backend. Is the server running on port 8000?');
-    }
-    throw error;
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Unknown error' }));
+    throw new Error(error.detail || `API error: ${response.status}`);
   }
+
+  return response.json();
 }
 
 // Types
@@ -59,29 +46,57 @@ export interface Project {
   project_type: string;
   description?: string;
   goals?: string[];
-  learning_goal?: string;
   created_at?: string;
   updated_at?: string;
   session_count?: number;
 }
 
 export interface Session {
-  id: string;
-  project_id?: string;
+  session_id: number;
   session_number: number;
-  started_at: string;
+  project_id: number;
+  user_id: number;
+  title?: string;
+  session_type: string;
+  llm_provider?: string;
+  llm_model?: string;
+  started_at?: string;
   ended_at?: string;
   message_count: number;
-  has_summary: boolean;
-  has_reflection: boolean;
+  has_summary?: boolean;
+  has_reflection?: boolean;
 }
 
 export interface SessionMessage {
-  id: string;
+  message_id: number;
+  session_id: number;
   role: string;
   content: string;
   created_at: string;
   message_index: number;
+}
+
+export interface SessionEndResult {
+  session_id: number;
+  ended_at: string;
+  message_count: number;
+  summary?: {
+    session_id: number;
+    summary_text: string;
+    key_topics?: string[];
+    learning_outcomes?: string[];
+    created_at: string;
+    updated_at: string;
+  };
+  reflection?: {
+    session_id: number;
+    reflection_text: string;
+    scores: ReflectionScores;
+    insights?: string[];
+    growth_areas?: string[];
+    created_at: string;
+    updated_at: string;
+  };
 }
 
 export interface Provider {
@@ -94,34 +109,40 @@ export interface Provider {
 
 export interface HealthResponse {
   status: string;
-  version?: string;
-  timestamp?: string;
-  services?: Record<string, any>;
+  services: {
+    api: boolean;
+    anthropic: boolean;
+    openai: boolean;
+    nebius: boolean;
+    memory?: boolean;
+    reflection?: boolean;
+    conversation?: boolean;
+  };
+  paths: {
+    data_exists: boolean;
+    philosophy_exists: boolean;
+  };
 }
 
 export interface PhilosophyResponse {
   base_files: string[];
-  domain_files: string[];
-  org_files: string[];
-  project_files: string[];
-  current_domain: string | null;
-  current_org: string | null;
-  current_project: string | null;
+  available_domains: string[];
+  available_organizations: string[];
 }
 
 export interface ReflectionScores {
-  awareness: number;
-  honesty: number;
-  accuracy: number;
-  competence: number;
-  compassion: number;
-  loving_kindness: number;
-  joyful_sharing: number;
+  Awareness: number;
+  Honesty: number;
+  Accuracy: number;
+  Competence: number;
+  Compassion: number;
+  'Loving-kindness': number;
+  'Joyful-sharing': number;
   overall: number;
 }
 
 export interface Reflection {
-  session_id: string;
+  session_id: number;
   reflection_text: string;
   scores: ReflectionScores;
   created_at: string;
@@ -132,20 +153,6 @@ export interface ValuesInfo {
     name: string;
     description: string;
   }>;
-}
-
-export interface MemorySearchResult {
-  content: string;
-  metadata: Record<string, any>;
-  similarity: number;
-}
-
-export interface LearningPlan {
-  subject: string;
-  current_level: string;
-  learning_goal: string;
-  time_commitment: string;
-  plan?: string;
 }
 
 // API functions
@@ -159,7 +166,7 @@ export async function getPhilosophy(): Promise<PhilosophyResponse> {
   return fetchAPI('/philosophy');
 }
 
-// Chat - FIXED: Added /api prefix
+// Chat - Fixed endpoint (was /chat/complete, should be /api/chat/complete)
 export async function sendMessage(
   messages: Message[],
   systemPrompt?: string
@@ -173,10 +180,21 @@ export async function sendMessage(
   });
 }
 
-export async function askQuestion(question: string): Promise<ChatResponse> {
+// Alternative: Ask endpoint with philosophy grounding
+export async function askQuestion(
+  question: string,
+  domain?: string,
+  organization?: string,
+  project?: string
+): Promise<ChatResponse> {
   return fetchAPI('/api/chat/ask', {
     method: 'POST',
-    body: JSON.stringify({ question }),
+    body: JSON.stringify({
+      question,
+      domain,
+      organization,
+      project,
+    }),
   });
 }
 
@@ -190,13 +208,13 @@ export async function setActiveProvider(providerId: string): Promise<void> {
   });
 }
 
-// Projects - FIXED: Added /api prefix
+// Projects - Fixed endpoints
 export async function getProjects(): Promise<Project[]> {
   return fetchAPI('/api/projects/');
 }
 
 export async function getProject(name: string): Promise<Project> {
-  return fetchAPI(`/api/projects/${encodeURIComponent(name)}`);
+  return fetchAPI(`/api/projects/${name}`);
 }
 
 export async function createProject(project: Partial<Project>): Promise<Project> {
@@ -207,93 +225,118 @@ export async function createProject(project: Partial<Project>): Promise<Project>
 }
 
 export async function updateProject(name: string, updates: Partial<Project>): Promise<Project> {
-  return fetchAPI(`/api/projects/${encodeURIComponent(name)}`, {
+  return fetchAPI(`/api/projects/${name}`, {
     method: 'PUT',
     body: JSON.stringify(updates),
   });
 }
 
 export async function deleteProject(name: string): Promise<void> {
-  await fetchAPI(`/api/projects/${encodeURIComponent(name)}`, {
+  await fetchAPI(`/api/projects/${name}`, {
     method: 'DELETE',
   });
 }
 
-export async function getProjectOutline(name: string): Promise<any> {
-  return fetchAPI(`/api/projects/${encodeURIComponent(name)}/outline`);
-}
-
-export async function getProjectLearningPlan(name: string): Promise<any> {
-  return fetchAPI(`/api/projects/${encodeURIComponent(name)}/learning-plan`);
-}
-
-export async function updateProjectLearningPlan(name: string, plan: any): Promise<any> {
-  return fetchAPI(`/api/projects/${encodeURIComponent(name)}/learning-plan`, {
-    method: 'PUT',
-    body: JSON.stringify(plan),
+// Sessions - Fixed and expanded for Day 3
+export async function startSession(
+  projectId: number = 1,
+  userId: number = 1,
+  title?: string,
+  sessionType: string = 'general'
+): Promise<Session> {
+  return fetchAPI('/api/sessions/start', {
+    method: 'POST',
+    body: JSON.stringify({
+      project_id: projectId,
+      user_id: userId,
+      title,
+      session_type: sessionType,
+    }),
   });
 }
 
-// Sessions - FIXED: Added /api prefix
-export async function getSessions(projectId?: string): Promise<Session[]> {
-  const endpoint = projectId 
-    ? `/api/sessions/?project_id=${projectId}` 
-    : '/api/sessions/';
-  return fetchAPI(endpoint);
+export async function getSessions(
+  projectId?: number,
+  userId?: number,
+  limit: number = 50
+): Promise<Session[]> {
+  const params = new URLSearchParams();
+  if (projectId) params.append('project_id', String(projectId));
+  if (userId) params.append('user_id', String(userId));
+  params.append('limit', String(limit));
+  
+  return fetchAPI(`/api/sessions/?${params.toString()}`);
 }
 
-export async function getSession(sessionId: string): Promise<Session> {
+export async function getSession(sessionId: number): Promise<Session> {
   return fetchAPI(`/api/sessions/${sessionId}`);
 }
 
-export async function createSession(projectId?: string): Promise<Session> {
-  return fetchAPI('/api/sessions/', {
-    method: 'POST',
-    body: JSON.stringify({ project_id: projectId }),
-  });
-}
-
-export async function endSession(sessionId: string): Promise<Session> {
+export async function endSession(
+  sessionId: number,
+  generateSummary: boolean = true,
+  generateReflection: boolean = true
+): Promise<SessionEndResult> {
   return fetchAPI(`/api/sessions/${sessionId}/end`, {
     method: 'POST',
+    body: JSON.stringify({
+      generate_summary: generateSummary,
+      generate_reflection: generateReflection,
+    }),
   });
 }
 
-export async function getSessionMessages(sessionId: string): Promise<SessionMessage[]> {
+export async function deleteSession(sessionId: number): Promise<void> {
+  await fetchAPI(`/api/sessions/${sessionId}`, {
+    method: 'DELETE',
+  });
+}
+
+export async function getSessionMessages(sessionId: number): Promise<{ session_id: number; messages: Message[] }> {
   return fetchAPI(`/api/sessions/${sessionId}/messages`);
 }
 
 export async function addMessageToSession(
-  sessionId: string,
+  sessionId: number,
   role: string,
-  content: string
+  content: string,
+  storeInMemory: boolean = true
 ): Promise<SessionMessage> {
   return fetchAPI(`/api/sessions/${sessionId}/messages`, {
     method: 'POST',
-    body: JSON.stringify({ role, content }),
+    body: JSON.stringify({ 
+      role, 
+      content,
+      store_in_memory: storeInMemory,
+    }),
   });
 }
 
-// Reflections - FIXED: Added /api prefix
-export async function getSessionReflection(sessionId: string): Promise<Reflection> {
+// Session Summaries
+export async function getSessionSummary(sessionId: number) {
+  return fetchAPI(`/api/sessions/${sessionId}/summary`);
+}
+
+export async function generateSessionSummary(sessionId: number, forceRegenerate: boolean = false) {
+  const params = forceRegenerate ? '?force_regenerate=true' : '';
+  return fetchAPI(`/api/sessions/${sessionId}/summary${params}`, {
+    method: 'POST',
+  });
+}
+
+// Reflections - Fixed endpoints
+export async function getSessionReflection(sessionId: number): Promise<Reflection> {
   return fetchAPI(`/api/sessions/${sessionId}/reflection`);
 }
 
-export async function generateReflection(sessionId: string): Promise<Reflection> {
-  return fetchAPI(`/api/sessions/${sessionId}/reflection/generate`, {
+export async function generateSessionReflection(sessionId: number, forceRegenerate: boolean = false): Promise<Reflection> {
+  const params = forceRegenerate ? '?force_regenerate=true' : '';
+  return fetchAPI(`/api/sessions/${sessionId}/reflection${params}`, {
     method: 'POST',
   });
 }
 
 // Reflection Service endpoints
-export async function getReflectionStatus(): Promise<any> {
-  return fetchAPI('/api/reflection/status');
-}
-
-export async function initializeReflection(): Promise<any> {
-  return fetchAPI('/api/reflection/initialize', { method: 'POST' });
-}
-
 export async function getValuesInfo(): Promise<ValuesInfo> {
   return fetchAPI('/api/reflection/values');
 }
@@ -301,70 +344,70 @@ export async function getValuesInfo(): Promise<ValuesInfo> {
 export async function generateValuesReflection(
   sessionId: number,
   messages: Message[]
-): Promise<any> {
+): Promise<{ reflection_text: string; scores: ReflectionScores }> {
   return fetchAPI('/api/reflection/values-reflection', {
     method: 'POST',
-    body: JSON.stringify({ session_id: sessionId, messages }),
+    body: JSON.stringify({
+      session_id: sessionId,
+      messages,
+    }),
   });
 }
 
-export async function getMetaSummary(): Promise<any> {
-  return fetchAPI('/api/reflection/meta-summary');
+export async function completeSession(
+  sessionId: number,
+  messages: Message[]
+): Promise<SessionEndResult> {
+  return fetchAPI(`/api/reflection/complete-session?session_id=${sessionId}`, {
+    method: 'POST',
+    body: JSON.stringify(messages),
+  });
 }
 
-export async function getRecentSummaries(limit: number = 10): Promise<any[]> {
-  return fetchAPI(`/api/reflection/recent-summaries?limit=${limit}`);
-}
-
-export async function getValuesTrend(days: number = 30): Promise<any> {
-  return fetchAPI(`/api/reflection/values-trend?days=${days}`);
-}
-
-// Memory - FIXED: Added /api prefix
-export async function getMemoryStatus(): Promise<any> {
+// Memory - Fixed endpoints
+export async function getMemoryStatus() {
   return fetchAPI('/api/memory/status');
 }
 
-export async function initializeMemory(): Promise<any> {
-  return fetchAPI('/api/memory/initialize', { method: 'POST' });
-}
-
-export async function searchMemory(
-  query: string, 
-  limit: number = 5
-): Promise<{ results: MemorySearchResult[] }> {
-  return fetchAPI('/api/memory/search', {
+export async function initializeMemory() {
+  return fetchAPI('/api/memory/initialize', {
     method: 'POST',
-    body: JSON.stringify({ query, n_results: limit }),
   });
 }
 
-export async function storeMemory(
-  content: string, 
-  metadata: Record<string, any> = {}
-): Promise<any> {
+export async function searchMemory(query: string, nResults: number = 5) {
+  return fetchAPI('/api/memory/search', {
+    method: 'POST',
+    body: JSON.stringify({
+      query,
+      n_results: nResults,
+    }),
+  });
+}
+
+export async function storeMemory(content: string, metadata: Record<string, unknown> = {}) {
   return fetchAPI('/api/memory/store', {
     method: 'POST',
     body: JSON.stringify({ content, metadata }),
   });
 }
 
-export async function getMemoryStats(): Promise<any> {
+export async function getMemoryStats() {
   return fetchAPI('/api/memory/stats');
 }
 
-// Pedagogy - FIXED: Added /api prefix
-export async function getPedagogyStatus(): Promise<any> {
+// Pedagogy - Fixed endpoints
+export async function getPedagogyStatus() {
   return fetchAPI('/api/pedagogy/status');
 }
 
-export async function initializePedagogy(): Promise<any> {
-  return fetchAPI('/api/pedagogy/initialize', { method: 'POST' });
+export async function initializePedagogy() {
+  return fetchAPI('/api/pedagogy/initialize', {
+    method: 'POST',
+  });
 }
 
-export async function detectSessionType(
-  messages: Message[]
-): Promise<{ session_type: string; confidence: number }> {
+export async function detectSessionType(messages: Message[]): Promise<{ session_type: string; confidence: number }> {
   return fetchAPI('/api/pedagogy/detect-session-type', {
     method: 'POST',
     body: JSON.stringify({ messages }),
@@ -375,7 +418,7 @@ export async function generateLearningPlan(
   subject: string,
   currentLevel: string,
   learningGoal: string,
-  timeCommitment: string
+  timeCommitment?: string
 ): Promise<{ plan: string }> {
   return fetchAPI('/api/pedagogy/learning-plan', {
     method: 'POST',
@@ -388,35 +431,8 @@ export async function generateLearningPlan(
   });
 }
 
-export async function suggestNextTopics(
-  subject: string,
-  completedTopics: string[],
-  currentLevel: string
-): Promise<{ topics: string[] }> {
-  return fetchAPI('/api/pedagogy/suggest-next-topics', {
-    method: 'POST',
-    body: JSON.stringify({
-      subject,
-      completed_topics: completedTopics,
-      current_level: currentLevel,
-    }),
-  });
-}
-
-// Files - FIXED: Added /api prefix
-export async function getFileStatus(): Promise<any> {
-  return fetchAPI('/api/files/status');
-}
-
-export async function getFileStats(): Promise<any> {
-  return fetchAPI('/api/files/stats');
-}
-
-export async function listUploads(): Promise<any[]> {
-  return fetchAPI('/api/files/uploads');
-}
-
-export async function uploadFile(file: File): Promise<any> {
+// Files
+export async function uploadFile(file: File): Promise<{ filename: string; path: string }> {
   const formData = new FormData();
   formData.append('file', file);
   
@@ -433,24 +449,13 @@ export async function uploadFile(file: File): Promise<any> {
   return response.json();
 }
 
-export async function downloadFile(filename: string): Promise<Blob> {
-  const response = await fetch(
-    `${API_BASE}/api/files/download?filename=${encodeURIComponent(filename)}`
-  );
-  
-  if (!response.ok) {
-    throw new Error('Download failed');
-  }
-  
-  return response.blob();
+export async function getUploadedFiles(): Promise<Array<{ filename: string; size: number; uploaded_at: string }>> {
+  return fetchAPI('/api/files/uploads');
 }
 
-// Utility function to check if backend is reachable
-export async function checkBackendConnection(): Promise<boolean> {
-  try {
-    await getHealth();
-    return true;
-  } catch {
-    return false;
-  }
+export async function extractTextFromFile(filename: string): Promise<{ text: string; pages?: number }> {
+  return fetchAPI('/api/files/extract-text', {
+    method: 'POST',
+    body: JSON.stringify({ filename }),
+  });
 }
