@@ -22,14 +22,18 @@ export default function ReflectionsPage() {
   const loadReflections = async () => {
     try {
       setIsLoading(true);
-      // Get all sessions that have reflections
-      const sessions = await getSessions();
+      setError(null);
+      
+      // Get all sessions for user_id=1 (default user)
+      // This fixes the "Must provide either project_id or user_id" error
+      const sessions = await getSessions(undefined, 1);
       const sessionsWithReflections = sessions.filter((s) => s.has_reflection);
 
       // Load reflections for each session
       const reflectionPromises = sessionsWithReflections.map(async (session) => {
         try {
-          const reflection = await getSessionReflection(session.id);
+          // Use session_id (not id) - matches API response
+          const reflection = await getSessionReflection(session.session_id);
           return {
             ...reflection,
             session_number: session.session_number,
@@ -91,8 +95,8 @@ export default function ReflectionsPage() {
               No Reflections Yet
             </h2>
             <p className="text-stone-500 dark:text-stone-400 max-w-md">
-              Complete a conversation session to receive your first reflection and 
-              7 Universal Values evaluation.
+              Complete a conversation session by clicking "End Session" to receive 
+              your first reflection and 7 Universal Values evaluation.
             </p>
           </div>
         ) : (
