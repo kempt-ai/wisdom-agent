@@ -115,6 +115,25 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         print(f"⚠ Conversation Service initialization failed: {e}")
     
+    # 6. Create default "Wisdom Sessions" project if it doesn't exist
+    try:
+        from backend.services.project_service import get_project_service
+        project_service = get_project_service()
+        
+        # Check if Wisdom Sessions project exists
+        existing = project_service.get_project("Wisdom Sessions")
+        if not existing:
+            project_service.create_project(
+                name="Wisdom Sessions",
+                project_type="wisdom",
+                description="Default project for wisdom-focused conversations"
+            )
+            print("✓ Created default 'Wisdom Sessions' project")
+        else:
+            print("✓ Default 'Wisdom Sessions' project exists")
+    except Exception as e:
+        print(f"⚠ Could not create default project: {e}")
+    
     print("-" * 40)
     print("Service initialization complete")
     print("-" * 40 + "\n")
