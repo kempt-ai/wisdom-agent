@@ -13,6 +13,7 @@ import {
   Plus,
   Sun,
   Moon,
+  History,  // NEW - icon for Sessions
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getProjects, type Project } from '@/lib/api';
@@ -52,6 +53,12 @@ export function Sidebar({ className }: SidebarProps) {
       name: 'Chat',
       href: '/chat',
       icon: MessageSquare,
+    },
+    // NEW - Wisdom Sessions link (Week 3 Day 4)
+    {
+      name: 'Wisdom Sessions',
+      href: '/sessions',
+      icon: History,
     },
     {
       name: 'Projects',

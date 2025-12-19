@@ -1,10 +1,10 @@
 """
 LLM Router - Multi-Provider Support
 
-Routes LLM requests to configured providers (Anthropic, OpenAI, Nebius, Local).
+Routes LLM requests to configured providers (Anthropic, OpenAI, Nebius, Gemini, Local).
 Allows users to configure and toggle between different LLM providers.
 
-Updated: Week 3 Day 3 - Fixed Nebius model names
+Updated: Week 3 Day 4 - Added Google Gemini support
 """
 
 import json
@@ -24,6 +24,12 @@ try:
 except ImportError:
     ollama = None
 
+# Google Gemini import (NEW - Week 3 Day 4)
+try:
+    import google.generativeai as genai
+except ImportError:
+    genai = None
+
 from backend.config import config
 
 
@@ -33,6 +39,7 @@ class LLMProvider(Enum):
     OPENAI = "openai"
     LOCAL = "local"      # For Ollama or similar
     NEBIUS = "nebius"    # Nebius AI platform
+    GEMINI = "gemini"    # Google Gemini (NEW)
 
 
 class LLMRouter:
@@ -57,7 +64,7 @@ class LLMRouter:
             with open(config.LLM_CONFIG_FILE, 'r') as f:
                 return json.load(f)
         
-        # Default configuration (Updated Week 3 Day 3)
+        # Default configuration (Updated Week 3 Day 4 - Added Gemini)
         return {
             'active_provider': 'anthropic',
             'providers': {
@@ -97,6 +104,20 @@ class LLMRouter:
                         'deepseek-ai/DeepSeek-R1',
                         'mistralai/Mistral-7B-Instruct-v0.3',
                         'mistralai/Mixtral-8x7B-Instruct-v0.1'
+                    ]
+                },
+                # NEW - Google Gemini (Week 3 Day 4)
+                'gemini': {
+                    'enabled': False,
+                    'api_key_env': 'GOOGLE_API_KEY',
+                    'default_model': 'gemini-1.5-flash',
+                    'max_tokens': config.DEFAULT_MAX_TOKENS,
+                    'available_models': [
+                        'gemini-1.5-flash',
+                        'gemini-1.5-flash-8b',
+                        'gemini-1.5-pro',
+                        'gemini-2.0-flash-exp',
+                        'gemini-exp-1206'
                     ]
                 }
             }
@@ -155,6 +176,21 @@ class LLMRouter:
                     print(f"✓ Fetched {len(models)} Nebius models")
             except Exception as e:
                 print(f"⚠ Could not fetch Nebius models: {e}")
+        
+        # NEW - Google Gemini - auto-enable if key present (Week 3 Day 4)
+        gemini_settings = providers.get('gemini', {})
+        google_api_key = getattr(config, 'GOOGLE_API_KEY', None)
+        if google_api_key and genai is not None:
+            if not gemini_settings.get('enabled'):
+                gemini_settings['enabled'] = True
+                self.provider_config['providers']['gemini'] = gemini_settings
+            
+            # Configure the Gemini API
+            genai.configure(api_key=google_api_key)
+            self.clients['gemini'] = genai
+            print("✓ Google Gemini client initialized")
+        elif genai is None and google_api_key:
+            print("⚠ Google Generative AI library not installed (pip install google-generativeai)")
     
     def get_available_providers(self) -> List[str]:
         """Get list of available (configured and enabled) providers."""
@@ -165,7 +201,7 @@ class LLMRouter:
         Set the active LLM provider.
         
         Args:
-            provider: Provider name (anthropic, openai, local, nebius)
+            provider: Provider name (anthropic, openai, local, nebius, gemini)
         """
         if provider not in self.clients:
             available = self.get_available_providers()
@@ -220,6 +256,8 @@ class LLMRouter:
             return self._complete_local(messages, system_prompt, max_tokens, temperature, model)
         elif provider == 'nebius':
             return self._complete_nebius(messages, system_prompt, max_tokens, temperature, model)
+        elif provider == 'gemini':
+            return self._complete_gemini(messages, system_prompt, max_tokens, temperature, model)
         else:
             raise ValueError(f"Unknown provider: {provider}")
     
@@ -294,6 +332,48 @@ class LLMRouter:
                     f"Use set_nebius_model() to change."
                 )
             raise Exception(f"Nebius API error: {e}")
+    
+    # NEW - Google Gemini completion method (Week 3 Day 4)
+    def _complete_gemini(self, messages, system_prompt, max_tokens, temperature, model) -> str:
+        """Complete using Google Gemini API."""
+        genai_client = self.clients['gemini']
+        
+        # Create the model with system instruction if provided
+        generation_config = {
+            "temperature": temperature,
+            "max_output_tokens": max_tokens,
+        }
+        
+        if system_prompt:
+            gemini_model = genai_client.GenerativeModel(
+                model_name=model,
+                generation_config=generation_config,
+                system_instruction=system_prompt
+            )
+        else:
+            gemini_model = genai_client.GenerativeModel(
+                model_name=model,
+                generation_config=generation_config
+            )
+        
+        # Convert messages to Gemini format
+        # Gemini uses 'user' and 'model' roles (not 'assistant')
+        gemini_history = []
+        for msg in messages[:-1]:  # All but last message go to history
+            role = 'model' if msg['role'] == 'assistant' else 'user'
+            gemini_history.append({
+                'role': role,
+                'parts': [msg['content']]
+            })
+        
+        # Start chat with history
+        chat = gemini_model.start_chat(history=gemini_history)
+        
+        # Send the last message
+        last_message = messages[-1]['content'] if messages else ""
+        response = chat.send_message(last_message)
+        
+        return response.text
     
     def get_provider_info(self, provider: Optional[str] = None) -> Dict:
         """
@@ -397,6 +477,28 @@ class LLMRouter:
         self.provider_config['providers']['nebius']['default_model'] = model_name
         self._save_config()
         print(f"✓ Nebius model set to: {model_name}")
+    
+    # === NEW - Gemini-specific methods (Week 3 Day 4) ===
+    
+    def get_gemini_models(self) -> List[str]:
+        """Get list of available Gemini models."""
+        if 'gemini' not in self.provider_config['providers']:
+            return []
+        return self.provider_config['providers']['gemini'].get('available_models', [])
+    
+    def set_gemini_model(self, model_name: str):
+        """Set the active model for Gemini."""
+        if 'gemini' not in self.provider_config['providers']:
+            raise ValueError("Gemini provider not configured")
+        
+        available = self.get_gemini_models()
+        if available and model_name not in available:
+            print(f"⚠ {model_name} not in configured model list")
+            print(f"Available: {', '.join(available)}...")
+        
+        self.provider_config['providers']['gemini']['default_model'] = model_name
+        self._save_config()
+        print(f"✓ Gemini model set to: {model_name}")
 
 
 def initialize_llm_router(config_file: Optional[str] = None) -> Optional[LLMRouter]:
