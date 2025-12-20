@@ -260,6 +260,7 @@ from backend.routers.projects import router as projects_router
 from backend.routers.files import router as files_router
 from backend.routers.pedagogy import router as pedagogy_router
 from backend.routers.reflection import router as reflection_router
+from backend.routers.review_router import router as review_router
 
 app.include_router(chat_router, prefix="/api/chat", tags=["Chat"])
 app.include_router(memory_router, tags=["Memory"])  # Already has /api/memory prefix
@@ -268,6 +269,7 @@ app.include_router(projects_router, tags=["Projects"])  # Already has /api/proje
 app.include_router(files_router, tags=["Files"])  # Already has /api/files prefix
 app.include_router(pedagogy_router, tags=["Pedagogy"])  # Already has /api/pedagogy prefix
 app.include_router(reflection_router, tags=["Reflection"])  # Already has /api/reflection prefix
+app.include_router(review_router)  # Already has /api/reviews prefix
 
 
 if __name__ == "__main__":

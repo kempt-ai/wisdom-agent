@@ -96,6 +96,7 @@ class User(Base):
     projects = relationship("Project", back_populates="user")
     sessions = relationship("Session", back_populates="user")
     memories = relationship("Memory", back_populates="user")
+    content_reviews = relationship("ContentReview", back_populates="user")
 
 
 class Organization(Base):
@@ -161,6 +162,7 @@ class Project(Base):
     user = relationship("User", back_populates="projects")
     organization = relationship("Organization", back_populates="projects")
     sessions = relationship("Session", back_populates="project", cascade="all, delete-orphan")
+    content_reviews = relationship("ContentReview", back_populates="project")
     
     # Composite unique constraint
     __table_args__ = (
@@ -199,6 +201,7 @@ class Session(Base):
     messages = relationship("Message", back_populates="session", cascade="all, delete-orphan")
     summary = relationship("SessionSummary", back_populates="session", uselist=False, cascade="all, delete-orphan")
     reflection = relationship("SessionReflection", back_populates="session", uselist=False, cascade="all, delete-orphan")
+    content_reviews = relationship("ContentReview", back_populates="session")
     
     __table_args__ = (
         Index('idx_project_session_number', 'project_id', 'session_number', unique=True),
