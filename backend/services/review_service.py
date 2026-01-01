@@ -1,12 +1,14 @@
 """
-Wisdom Agent - Fact Checker Review Service
+Wisdom Agent - Fact Checker Review Service (Updated for Phase 2)
 
 Main orchestrator for the fact checking feature.
 Coordinates content extraction, claim analysis, fact checking,
 logic analysis, and wisdom evaluation.
 
 Author: Wisdom Agent Team  
-Date: 2025-12-18
+Date: 2025-12-18 (Phase 1)
+Updated: 2025-12-20 (Phase 2 - Full Integration)
+Updated: 2025-12-30 (Fixed session_number NULL constraint bug)
 """
 
 import logging
@@ -20,11 +22,26 @@ from backend.database.connection import get_db_session
 from backend.database.fact_check_models import (
     ContentReview, SourceMetadata, ExtractedClaim,
     FactCheckResult, LogicAnalysis, WisdomEvaluation,
-    ReviewStatus, SourceType
+    ReviewStatus, SourceType, FactualVerdict
 )
 from backend.models.review_models import (
     ReviewCreateRequest, ReviewListResponse, ReviewDetailResponse,
     ReviewSummaryResponse, ReviewStatusResponse
+)
+
+# Phase 2 service imports
+from backend.services.content_extraction_service import (
+    get_content_extraction_service, ContentExtractionError, PaywallDetectedError
+)
+from backend.services.claim_extraction_service import (
+    get_claim_extraction_service, ClaimExtractionError
+)
+from backend.services.fact_check_service import get_fact_check_service
+from backend.services.logic_analysis_service import (
+    get_logic_analysis_service, LogicAnalysisError
+)
+from backend.services.wisdom_evaluation_service import (
+    get_wisdom_evaluation_service, WisdomEvaluationError
 )
 
 logger = logging.getLogger(__name__)
@@ -38,11 +55,13 @@ class ReviewService:
     - Creates and manages reviews
     - Coordinates the analysis pipeline
     - Integrates with session management
+    
+    Phase 2 Update: Now fully integrated with all analysis services.
     """
     
     def __init__(self):
         """Initialize the review service."""
-        # These will be initialized on first use
+        # Services are initialized lazily to avoid circular imports
         self._content_extraction_service = None
         self._claim_extraction_service = None
         self._fact_check_service = None
@@ -50,7 +69,36 @@ class ReviewService:
         self._wisdom_evaluation_service = None
     
     # ========================================================================
-    # CRUD OPERATIONS
+    # SERVICE GETTERS (Lazy initialization)
+    # ========================================================================
+    
+    def _get_content_extraction(self):
+        if self._content_extraction_service is None:
+            self._content_extraction_service = get_content_extraction_service()
+        return self._content_extraction_service
+    
+    def _get_claim_extraction(self):
+        if self._claim_extraction_service is None:
+            self._claim_extraction_service = get_claim_extraction_service()
+        return self._claim_extraction_service
+    
+    def _get_fact_check(self):
+        if self._fact_check_service is None:
+            self._fact_check_service = get_fact_check_service()
+        return self._fact_check_service
+    
+    def _get_logic_analysis(self):
+        if self._logic_analysis_service is None:
+            self._logic_analysis_service = get_logic_analysis_service()
+        return self._logic_analysis_service
+    
+    def _get_wisdom_evaluation(self):
+        if self._wisdom_evaluation_service is None:
+            self._wisdom_evaluation_service = get_wisdom_evaluation_service()
+        return self._wisdom_evaluation_service
+    
+    # ========================================================================
+    # CRUD OPERATIONS (unchanged from Phase 1)
     # ========================================================================
     
     async def create_review(self, request: ReviewCreateRequest) -> ReviewSummaryResponse:
@@ -237,7 +285,7 @@ class ReviewService:
             return [self._to_summary_response(r) for r in reviews]
     
     # ========================================================================
-    # ANALYSIS PIPELINE
+    # ANALYSIS PIPELINE (Phase 2 - Fully Implemented)
     # ========================================================================
     
     async def run_analysis(self, review_id: int):
@@ -250,6 +298,7 @@ class ReviewService:
         3. Fact checking (verify claims)
         4. Logic analysis (check argument structure)
         5. Wisdom evaluation (7 Values + Something Deeperism)
+        6. Generate summary
         """
         logger.info(f"Starting analysis for review {review_id}")
         
@@ -258,21 +307,28 @@ class ReviewService:
             await self._update_status(review_id, ReviewStatus.EXTRACTING)
             content = await self._extract_content(review_id)
             
+            if not content:
+                raise Exception("Content extraction returned empty content")
+            
             # Step 2: Extract claims
             await self._update_status(review_id, ReviewStatus.ANALYZING_CLAIMS)
             claims = await self._extract_claims(review_id, content)
             
             # Step 3: Fact check claims
             await self._update_status(review_id, ReviewStatus.FACT_CHECKING)
-            await self._fact_check_claims(review_id, claims)
+            fact_results = await self._fact_check_claims(review_id, claims)
             
             # Step 4: Logic analysis
             await self._update_status(review_id, ReviewStatus.LOGIC_ANALYSIS)
-            await self._analyze_logic(review_id, content)
+            logic_results = await self._analyze_logic(review_id, content)
             
             # Step 5: Wisdom evaluation
             await self._update_status(review_id, ReviewStatus.WISDOM_EVALUATION)
-            await self._evaluate_wisdom(review_id, content)
+            await self._evaluate_wisdom(
+                review_id, content,
+                fact_summary=self._summarize_fact_results(fact_results),
+                logic_summary=self._summarize_logic_results(logic_results)
+            )
             
             # Step 6: Generate summary and complete
             await self._generate_summary(review_id)
@@ -280,77 +336,229 @@ class ReviewService:
             
             logger.info(f"Completed analysis for review {review_id}")
             
+        except PaywallDetectedError as e:
+            logger.warning(f"Paywall detected for review {review_id}: {e}")
+            await self._update_status(review_id, ReviewStatus.FAILED, str(e))
         except Exception as e:
             logger.exception(f"Analysis failed for review {review_id}: {e}")
             await self._update_status(review_id, ReviewStatus.FAILED, str(e))
     
     # ========================================================================
-    # PIPELINE STEPS (to be implemented with actual services)
+    # PIPELINE STEPS (Phase 2 - Fully Implemented)
     # ========================================================================
     
     async def _extract_content(self, review_id: int) -> str:
         """Extract and clean content from the source."""
-        # TODO: Implement with ContentExtractionService
-        # For now, return placeholder
-        with get_db_session() as db:
-            review = db.get(ContentReview, review_id)
-            if review.source_type == SourceType.URL:
-                # Fetch URL content
-                logger.info(f"Would fetch URL: {review.source_url}")
-                return f"[Content from {review.source_url}]"
-            elif review.source_type == SourceType.TEXT:
-                return review.source_content
-            else:
-                return review.source_content
+        service = self._get_content_extraction()
+        result = await service.extract_content(review_id)
+        return result.get("content", "")
     
     async def _extract_claims(self, review_id: int, content: str) -> List[Dict[str, Any]]:
         """Identify claims in the content."""
-        # TODO: Implement with ClaimExtractionService
-        # For now, create placeholder claims
-        logger.info(f"Would extract claims from content for review {review_id}")
-        return []
+        service = self._get_claim_extraction()
+        claims = await service.extract_claims(review_id, content)
+        return claims
     
-    async def _fact_check_claims(self, review_id: int, claims: List[Dict[str, Any]]):
+    async def _fact_check_claims(
+        self, 
+        review_id: int, 
+        claims: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
         """Verify extracted claims."""
-        # TODO: Implement with FactCheckService
-        logger.info(f"Would fact check {len(claims)} claims for review {review_id}")
+        service = self._get_fact_check()
+        results = await service.fact_check_claims(review_id, claims)
+        return results
     
-    async def _analyze_logic(self, review_id: int, content: str):
+    async def _analyze_logic(self, review_id: int, content: str) -> Dict[str, Any]:
         """Analyze logical structure and fallacies."""
-        # TODO: Implement with LogicAnalysisService
-        logger.info(f"Would analyze logic for review {review_id}")
+        service = self._get_logic_analysis()
+        results = await service.analyze_logic(review_id, content)
+        return results
     
-    async def _evaluate_wisdom(self, review_id: int, content: str):
+    async def _evaluate_wisdom(
+        self, 
+        review_id: int, 
+        content: str,
+        fact_summary: Optional[str] = None,
+        logic_summary: Optional[str] = None
+    ):
         """Evaluate against 7 Universal Values and Something Deeperism."""
-        # TODO: Implement with WisdomEvaluationService
-        logger.info(f"Would evaluate wisdom for review {review_id}")
+        service = self._get_wisdom_evaluation()
+        await service.evaluate_wisdom(
+            review_id, content,
+            fact_check_summary=fact_summary,
+            logic_summary=logic_summary
+        )
     
     async def _generate_summary(self, review_id: int):
         """Generate quick summary from all analysis results."""
-        # TODO: Combine results into summary
-        logger.info(f"Would generate summary for review {review_id}")
+        with get_db_session() as db:
+            review = db.get(ContentReview, review_id)
+            if not review:
+                return
+            
+            # Build summary from available data
+            summary_parts = []
+            
+            # Factual summary
+            true_count = 0
+            false_count = 0
+            mixed_count = 0
+            for claim in review.claims:
+                if claim.fact_check_result:
+                    verdict = claim.fact_check_result.verdict.value
+                    if verdict in ["true", "mostly_true"]:
+                        true_count += 1
+                    elif verdict in ["false", "mostly_false"]:
+                        false_count += 1
+                    else:
+                        mixed_count += 1
+            
+            total_claims = len(review.claims)
+            if total_claims > 0:
+                summary_parts.append(
+                    f"Analyzed {total_claims} claims: {true_count} verified, "
+                    f"{false_count} false/misleading, {mixed_count} mixed/unverifiable."
+                )
+                
+                # Determine overall factual verdict
+                if false_count == 0 and true_count > 0:
+                    review.overall_factual_verdict = FactualVerdict.ACCURATE
+                elif true_count == 0 and false_count > 0:
+                    review.overall_factual_verdict = FactualVerdict.INACCURATE
+                elif true_count > false_count:
+                    review.overall_factual_verdict = FactualVerdict.MOSTLY_ACCURATE
+                elif false_count > true_count:
+                    review.overall_factual_verdict = FactualVerdict.MOSTLY_INACCURATE
+                else:
+                    review.overall_factual_verdict = FactualVerdict.MIXED
+            
+            # Logic summary
+            if review.logic_analysis:
+                fallacy_count = len(review.logic_analysis.fallacies_found or [])
+                if fallacy_count > 0:
+                    summary_parts.append(
+                        f"Found {fallacy_count} logical fallacy(s)."
+                    )
+                else:
+                    summary_parts.append("No significant logical fallacies detected.")
+            
+            # Wisdom summary
+            if review.wisdom_evaluation:
+                wisdom_verdict = review.wisdom_evaluation.serves_wisdom_or_folly
+                if wisdom_verdict:
+                    verdict_text = wisdom_verdict.value.replace("_", " ").title()
+                    summary_parts.append(f"Wisdom assessment: {verdict_text}.")
+            
+            review.quick_summary = " ".join(summary_parts)
+            
+            # Calculate confidence score (average of available confidences)
+            confidences = []
+            for claim in review.claims:
+                if claim.fact_check_result and claim.fact_check_result.confidence:
+                    confidences.append(claim.fact_check_result.confidence)
+            if review.logic_analysis and review.logic_analysis.confidence:
+                confidences.append(review.logic_analysis.confidence)
+            
+            if confidences:
+                review.confidence_score = sum(confidences) / len(confidences)
+            
+            review.completed_at = datetime.utcnow()
+            db.commit()
+    
+    def _summarize_fact_results(self, results: List[Dict[str, Any]]) -> str:
+        """Create a summary of fact-check results for wisdom evaluation."""
+        if not results:
+            return "No fact-check results available."
+        
+        summaries = []
+        for r in results[:5]:  # Limit to first 5
+            claim = r.get("claim_text", "Unknown claim")[:100]
+            verdict = r.get("verdict", "unknown")
+            summaries.append(f"- {claim}: {verdict}")
+        
+        return "Fact-check summary:\n" + "\n".join(summaries)
+    
+    def _summarize_logic_results(self, results: Dict[str, Any]) -> str:
+        """Create a summary of logic analysis for wisdom evaluation."""
+        if not results or "error" in results:
+            return "No logic analysis available."
+        
+        parts = []
+        
+        if results.get("main_conclusion"):
+            parts.append(f"Main conclusion: {results['main_conclusion'][:200]}")
+        
+        fallacies = results.get("fallacies_found", [])
+        if fallacies:
+            fallacy_names = [f.get("name", "Unknown") for f in fallacies[:3]]
+            parts.append(f"Fallacies found: {', '.join(fallacy_names)}")
+        
+        score = results.get("logic_quality_score")
+        if score:
+            parts.append(f"Logic quality score: {score:.2f}")
+        
+        return "\n".join(parts) if parts else "Logic analysis completed."
     
     # ========================================================================
-    # HELPER METHODS
+    # HELPER METHODS (FIXED - 2025-12-30)
     # ========================================================================
     
     async def _create_fact_check_session(self, db, request: ReviewCreateRequest) -> int:
-        """Create a new session for a standalone fact check."""
+        """
+        Create a new session for a standalone fact check.
+        
+        FIXED 2025-12-30: Now properly sets session_number and handles missing project_id.
+        Previously this function did not set session_number, causing NULL constraint violations.
+        """
         # Import here to avoid circular imports
-        from backend.database.models import Session
+        from backend.database.models import Session, Project, SessionType
+        
+        # Handle case where project_id is not provided
+        project_id = request.project_id
+        
+        if project_id is None:
+            # Try to find or create a default "Fact Checks" project
+            default_project = db.query(Project).filter(
+                Project.name == "Fact Checks",
+                Project.user_id == 1  # TODO: Get from auth context
+            ).first()
+            
+            if default_project:
+                project_id = default_project.id
+            else:
+                # Create the default Fact Checks project
+                default_project = Project(
+                    name="Fact Checks",
+                    slug="fact-checks",
+                    description="Default project for standalone fact-checking sessions",
+                    session_type=SessionType.GENERAL,
+                    user_id=1,  # TODO: Get from auth context
+                )
+                db.add(default_project)
+                db.flush()  # Get the ID
+                project_id = default_project.id
+                logger.info(f"Created default 'Fact Checks' project with id {project_id}")
+        
+        # Calculate the next session_number for this project
+        max_session_num = db.query(func.max(Session.session_number)).filter(
+            Session.project_id == project_id
+        ).scalar()
+        
+        next_session_number = (max_session_num or 0) + 1
         
         # Create session with fact-check type
         session = Session(
             user_id=1,  # TODO: Get from auth context
-            project_id=request.project_id,
+            project_id=project_id,
+            session_number=next_session_number,  # FIX: This was missing before!
             title=f"Fact Check: {request.title or request.source_url or 'New Analysis'}",
-            # session_type="fact_check",  # If your Session model has this field
         )
         
         db.add(session)
         db.flush()  # Get the ID without committing
         
-        logger.info(f"Created fact-check session {session.id}")
+        logger.info(f"Created fact-check session {session.id} (session #{next_session_number} in project {project_id})")
         return session.id
     
     async def _update_status(
@@ -501,3 +709,18 @@ class ReviewService:
             updated_at=review.updated_at,
             completed_at=review.completed_at,
         )
+
+
+# ========================================================================
+# MODULE-LEVEL SINGLETON
+# ========================================================================
+
+_review_service: Optional[ReviewService] = None
+
+
+def get_review_service() -> ReviewService:
+    """Get or create the review service singleton."""
+    global _review_service
+    if _review_service is None:
+        _review_service = ReviewService()
+    return _review_service

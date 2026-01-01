@@ -1,6 +1,6 @@
 /**
  * API client for communicating with the Wisdom Agent backend
- * Updated: Week 3 Day 3 - Fixed endpoints, added session management
+ * Updated: Added fact-check API calls and project archive functionality
  */
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
@@ -49,6 +49,8 @@ export interface Project {
   created_at?: string;
   updated_at?: string;
   session_count?: number;
+  is_archived?: boolean;  // NEW
+  archived_at?: string;   // NEW
 }
 
 export interface Session {
@@ -155,6 +157,73 @@ export interface ValuesInfo {
   }>;
 }
 
+// NEW - Fact Check Types
+export interface FactCheckTriggerResponse {
+  review_id: number;
+  session_id: number;
+  status: string;
+  poll_url: string;
+  message: string;
+}
+
+export interface FactCheckResult {
+  id: number;
+  title?: string;
+  source_type: string;
+  source_url?: string;
+  status: string;
+  created_at: string;
+  completed_at?: string;
+  factual_verdict?: string;
+  logic_verdict?: string;
+  wisdom_verdict?: string;
+  overall_verdict?: string;
+  claims?: FactCheckClaim[];
+  logic_analysis?: LogicAnalysis;
+  wisdom_evaluation?: WisdomEvaluation;
+}
+
+export interface FactCheckClaim {
+  id: number;
+  claim_text: string;
+  verdict: string;
+  confidence: number;
+  explanation: string;
+  sources?: string[];
+}
+
+export interface LogicAnalysis {
+  overall_soundness: string;
+  fallacies_detected: string[];
+  argument_structure: string;
+  recommendations: string[];
+}
+
+export interface WisdomEvaluation {
+  overall_alignment: string;
+  values_assessment: Record<string, { score: number; explanation: string }>;
+  something_deeperism_alignment: string;
+  recommendations: string[];
+}
+
+export interface FactCheckListResponse {
+  reviews: FactCheckSummary[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface FactCheckSummary {
+  id: number;
+  title?: string;
+  source_type: string;
+  source_url?: string;
+  status: string;
+  created_at: string;
+  factual_verdict?: string;
+  wisdom_verdict?: string;
+}
+
 // API functions
 
 // Health & Status
@@ -209,8 +278,14 @@ export async function setActiveProvider(providerId: string): Promise<void> {
 }
 
 // Projects - Fixed endpoints
-export async function getProjects(): Promise<Project[]> {
-  return fetchAPI('/api/projects/');
+export async function getProjects(includeArchived: boolean = false): Promise<Project[]> {
+  const params = includeArchived ? '?include_archived=true' : '';
+  return fetchAPI(`/api/projects/${params}`);
+}
+
+// NEW - Get only archived projects
+export async function getArchivedProjects(): Promise<Project[]> {
+  return fetchAPI('/api/projects/?archived_only=true');
 }
 
 export async function getProject(name: string): Promise<Project> {
@@ -234,6 +309,19 @@ export async function updateProject(name: string, updates: Partial<Project>): Pr
 export async function deleteProject(name: string): Promise<void> {
   await fetchAPI(`/api/projects/${name}`, {
     method: 'DELETE',
+  });
+}
+
+// NEW - Archive/Unarchive projects
+export async function archiveProject(nameOrId: string): Promise<Project> {
+  return fetchAPI(`/api/projects/${nameOrId}/archive`, {
+    method: 'POST',
+  });
+}
+
+export async function unarchiveProject(nameOrId: string): Promise<Project> {
+  return fetchAPI(`/api/projects/${nameOrId}/unarchive`, {
+    method: 'POST',
   });
 }
 
@@ -362,6 +450,151 @@ export async function completeSession(
     method: 'POST',
     body: JSON.stringify(messages),
   });
+}
+
+// ============================================
+// NEW - Fact Check API Functions
+// ============================================
+
+/**
+ * Trigger a fact check within a session
+ */
+export async function triggerFactCheck(
+  sessionId: number,
+  content: string,
+  sourceType: 'text' | 'url' = 'text',
+  sourceUrl?: string,
+  title?: string
+): Promise<FactCheckTriggerResponse> {
+  return fetchAPI(`/api/sessions/${sessionId}/factcheck`, {
+    method: 'POST',
+    body: JSON.stringify({
+      content,
+      source_type: sourceType,
+      source_url: sourceUrl,
+      title,
+    }),
+  });
+}
+
+/**
+ * Quick fact-check a URL within a session
+ */
+export async function factCheckUrl(sessionId: number, url: string): Promise<FactCheckTriggerResponse> {
+  return fetchAPI(`/api/sessions/${sessionId}/factcheck-url?url=${encodeURIComponent(url)}`, {
+    method: 'POST',
+  });
+}
+
+/**
+ * Quick fact-check a claim within a session
+ */
+export async function factCheckClaim(sessionId: number, claim: string): Promise<FactCheckTriggerResponse> {
+  return fetchAPI(`/api/sessions/${sessionId}/factcheck-claim?claim=${encodeURIComponent(claim)}`, {
+    method: 'POST',
+  });
+}
+
+/**
+ * Get all fact checks for a session
+ */
+export async function getSessionFactChecks(
+  sessionId: number,
+  includeDetails: boolean = false
+): Promise<{ session_id: number; factchecks: FactCheckSummary[]; total: number }> {
+  const params = includeDetails ? '?include_details=true' : '';
+  return fetchAPI(`/api/sessions/${sessionId}/factchecks${params}`);
+}
+
+/**
+ * Create a standalone fact check review (not tied to a session)
+ */
+export async function createFactCheckReview(
+  sourceType: 'text' | 'url' | 'file',
+  content: string,
+  options?: {
+    sourceUrl?: string;
+    title?: string;
+    sessionId?: number;
+    projectId?: number;
+  }
+): Promise<FactCheckSummary> {
+  return fetchAPI('/api/reviews', {
+    method: 'POST',
+    body: JSON.stringify({
+      source_type: sourceType,
+      source_content: sourceType === 'text' ? content : undefined,
+      source_url: sourceType === 'url' ? content : options?.sourceUrl,
+      title: options?.title,
+      session_id: options?.sessionId,
+      project_id: options?.projectId,
+    }),
+  });
+}
+
+/**
+ * List all fact check reviews
+ */
+export async function listFactCheckReviews(options?: {
+  projectId?: number;
+  sessionId?: number;
+  status?: string;
+  search?: string;
+  limit?: number;
+  offset?: number;
+}): Promise<FactCheckListResponse> {
+  const params = new URLSearchParams();
+  if (options?.projectId) params.append('project_id', String(options.projectId));
+  if (options?.sessionId) params.append('session_id', String(options.sessionId));
+  if (options?.status) params.append('status', options.status);
+  if (options?.search) params.append('search', options.search);
+  if (options?.limit) params.append('limit', String(options.limit));
+  if (options?.offset) params.append('offset', String(options.offset));
+  
+  return fetchAPI(`/api/reviews?${params.toString()}`);
+}
+
+/**
+ * Get a single fact check review with full details
+ */
+export async function getFactCheckReview(reviewId: number): Promise<FactCheckResult> {
+  return fetchAPI(`/api/reviews/${reviewId}`);
+}
+
+/**
+ * Get the status of a fact check review (for polling)
+ */
+export async function getFactCheckStatus(reviewId: number): Promise<{ status: string; progress?: number }> {
+  return fetchAPI(`/api/reviews/${reviewId}/status`);
+}
+
+/**
+ * Delete a fact check review
+ */
+export async function deleteFactCheckReview(reviewId: number): Promise<void> {
+  await fetchAPI(`/api/reviews/${reviewId}`, {
+    method: 'DELETE',
+  });
+}
+
+/**
+ * Browse all completed fact checks (repository view)
+ */
+export async function browseFactChecks(options?: {
+  search?: string;
+  factualVerdict?: string;
+  wisdomVerdict?: string;
+  limit?: number;
+  offset?: number;
+}): Promise<FactCheckListResponse> {
+  const params = new URLSearchParams();
+  if (options?.search) params.append('search', options.search);
+  if (options?.factualVerdict) params.append('factual_verdict', options.factualVerdict);
+  if (options?.wisdomVerdict) params.append('wisdom_verdict', options.wisdomVerdict);
+  if (options?.limit) params.append('limit', String(options.limit));
+  if (options?.offset) params.append('offset', String(options.offset));
+  
+  return fetchAPI(`/api/reviews/repository/all?${params.toString()}`);
 }
 
 // Memory - Fixed endpoints

@@ -46,8 +46,9 @@ class Config:
     DB_PORT: int = int(os.getenv("DB_PORT", "5432"))
     DB_NAME: str = os.getenv("DB_NAME", "wisdom_agent_db")
     
-    # SQLite fallback for testing when PostgreSQL unavailable
-    USE_SQLITE: bool = os.getenv("USE_SQLITE", "false").lower() == "true"
+    # Use SQLite unless DATABASE_URL is explicitly set to a PostgreSQL URL
+    _db_url = os.getenv("DATABASE_URL", "")
+    USE_SQLITE: bool = not _db_url.startswith("postgresql")
     SQLITE_PATH: Path = DATA_DIR / "wisdom_agent.db"
     
     # Construct DATABASE_URL from components if not directly provided

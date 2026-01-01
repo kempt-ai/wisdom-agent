@@ -5,7 +5,6 @@ Manages sessions, messages, and conversation persistence.
 This service connects the sessions API to the database and other services.
 
 Created: Week 3 Day 3
-Modified: Added session orientation context for continuity across sessions
 """
 
 import json
@@ -29,7 +28,6 @@ class ConversationService:
     - Storing and retrieving messages
     - Generating summaries and reflections
     - Connecting to memory service for semantic search
-    - Building orientation context for session continuity
     """
     
     def __init__(self, llm_router=None):
@@ -135,137 +133,6 @@ class ConversationService:
         }
     
     # ============================================
-    # SESSION ORIENTATION & CONTINUITY
-    # ============================================
-    
-    def get_session_orientation_context(
-        self,
-        include_meta: bool = True,
-        include_reflection: bool = True,
-        max_previous_sessions: int = 1
-    ) -> Optional[str]:
-        """
-        Build orientation context from previous sessions for LLM grounding.
-        
-        This creates continuity by loading:
-        - Most recent session's summary and reflection
-        - Meta-summary of wisdom development journey
-        
-        Args:
-            include_meta: Whether to include the meta-summary
-            include_reflection: Whether to include 7UV reflection scores
-            max_previous_sessions: How many previous sessions to summarize
-            
-        Returns:
-            Formatted context string or None if no history
-        """
-        context_parts = []
-        
-        # Get completed sessions sorted by end time
-        completed_sessions = [
-            s for s in self._sessions.values() 
-            if s.get('ended_at') and s.get('has_summary')
-        ]
-        
-        if completed_sessions:
-            completed_sessions.sort(key=lambda x: x.get('ended_at', ''), reverse=True)
-            
-            # Process the most recent session(s)
-            for i, session in enumerate(completed_sessions[:max_previous_sessions]):
-                session_id = session['session_id']
-                session_title = session.get('title', f'Session {session_id}')
-                
-                if i == 0:
-                    context_parts.append("=== PREVIOUS SESSION CONTEXT ===")
-                    context_parts.append(f"Last Session: {session_title}")
-                    context_parts.append(f"Ended: {session.get('ended_at', 'Unknown')}")
-                else:
-                    context_parts.append(f"\n--- Earlier Session: {session_title} ---")
-                
-                # Load previous summary
-                summary = self.get_summary(session_id)
-                if summary:
-                    summary_text = summary.get('summary_text', '')
-                    if summary_text:
-                        # Truncate if very long
-                        if len(summary_text) > 1500:
-                            summary_text = summary_text[:1500] + "..."
-                        context_parts.append(f"\nSummary:\n{summary_text}")
-                
-                # Load previous reflection scores
-                if include_reflection:
-                    reflection = self.get_reflection(session_id)
-                    if reflection:
-                        scores = reflection.get('scores', {})
-                        if scores:
-                            context_parts.append("\n7 Universal Values Scores:")
-                            for value in ['Awareness', 'Honesty', 'Accuracy', 'Competence', 
-                                         'Compassion', 'Loving-kindness', 'Joyful-sharing']:
-                                if value in scores:
-                                    score = scores[value]
-                                    bar = "█" * score + "░" * (10 - score)
-                                    context_parts.append(f"  {value:15} [{bar}] {score}/10")
-                            if 'overall' in scores:
-                                context_parts.append(f"  {'OVERALL':15} {scores['overall']:.1f}/10")
-                            
-                            # Include areas for improvement if available
-                            reflection_text = reflection.get('reflection_text', '')
-                            if 'improvement' in reflection_text.lower():
-                                # Try to extract improvement notes
-                                context_parts.append("\nAreas noted for growth in previous session.")
-        
-        # Load meta-summary if requested
-        if include_meta:
-            try:
-                from backend.services.reflection_service import get_reflection_service
-                reflection_service = get_reflection_service()
-                if reflection_service:
-                    meta = reflection_service.load_meta_summary()
-                    if meta:
-                        total_sessions = meta.get('total_sessions_synthesized', 0)
-                        thematic = meta.get('part_2_thematic', {})
-                        
-                        if total_sessions > 0 or thematic:
-                            context_parts.append("\n=== WISDOM DEVELOPMENT JOURNEY ===")
-                            context_parts.append(f"Total sessions in journey: {total_sessions}")
-                            
-                            if thematic.get('key_patterns'):
-                                patterns = thematic['key_patterns'][:5]  # Top 5 patterns
-                                context_parts.append(f"\nKey Patterns Observed:")
-                                for pattern in patterns:
-                                    context_parts.append(f"  • {pattern}")
-                            
-                            if thematic.get('philosophical_evolution'):
-                                evolution = thematic['philosophical_evolution'][:3]
-                                context_parts.append(f"\nPhilosophical Evolution:")
-                                for item in evolution:
-                                    context_parts.append(f"  • {item}")
-                            
-                            if thematic.get('ongoing_questions'):
-                                questions = thematic['ongoing_questions'][:3]
-                                context_parts.append(f"\nOngoing Questions:")
-                                for q in questions:
-                                    context_parts.append(f"  • {q}")
-                            
-                            if thematic.get('important_developments'):
-                                developments = thematic['important_developments'][:3]
-                                context_parts.append(f"\nImportant Developments:")
-                                for d in developments:
-                                    context_parts.append(f"  • {d}")
-            except Exception as e:
-                print(f"Warning: Could not load meta-summary: {e}")
-        
-        if context_parts:
-            # Add instruction for the AI
-            context_parts.insert(0, "=" * 60)
-            context_parts.insert(1, "ORIENTATION: Context from previous sessions for continuity")
-            context_parts.insert(2, "Use this to maintain awareness of the user's wisdom journey.")
-            context_parts.insert(3, "=" * 60 + "\n")
-            return "\n".join(context_parts)
-        
-        return None
-    
-    # ============================================
     # SESSION MANAGEMENT
     # ============================================
     
@@ -276,8 +143,7 @@ class ConversationService:
         title: Optional[str] = None,
         session_type: str = "general",
         llm_provider: Optional[str] = None,
-        llm_model: Optional[str] = None,
-        include_orientation: bool = True
+        llm_model: Optional[str] = None
     ) -> Optional[Dict]:
         """
         Start a new conversation session.
@@ -289,7 +155,6 @@ class ConversationService:
             session_type: Type of session (general, learning, reflection, etc.)
             llm_provider: LLM provider to use
             llm_model: LLM model to use
-            include_orientation: Whether to load context from previous sessions
             
         Returns:
             Session info dictionary or None if failed
@@ -313,16 +178,8 @@ class ConversationService:
             "ended_at": None,
             "message_count": 0,
             "has_summary": False,
-            "has_reflection": False,
-            "orientation_context": None
+            "has_reflection": False
         }
-        
-        # Build orientation context from previous sessions
-        if include_orientation:
-            orientation_context = self.get_session_orientation_context()
-            if orientation_context:
-                session["orientation_context"] = orientation_context
-                print(f"✓ Loaded orientation context for session {session_id}")
         
         self._sessions[session_id] = session
         self._messages[session_id] = []
@@ -432,17 +289,6 @@ class ConversationService:
                 session['has_reflection'] = True
             except Exception as e:
                 print(f"Error generating reflection: {e}")
-        
-        # Update meta-summary with this session
-        if result.get("summary"):
-            try:
-                from backend.services.reflection_service import get_reflection_service
-                reflection_service = get_reflection_service()
-                if reflection_service:
-                    reflection_service.update_meta_summary(session_id, result["summary"])
-                    print(f"✓ Updated meta-summary with session {session_id}")
-            except Exception as e:
-                print(f"Warning: Could not update meta-summary: {e}")
         
         # Save session to disk
         self._save_session_to_disk(session_id)

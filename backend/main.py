@@ -3,6 +3,9 @@ Wisdom Agent - FastAPI Backend
 
 Main entry point for the Wisdom Agent API server.
 Updated: Week 3 Day 3 - Auto-initialize services on startup
+Updated: 2025-12-21 - Added session fact-check router (Phase 3)
+Updated: 2025-12-30 - Added Knowledge Base, Spending, auto table creation
+Updated: 2025-12-30 - Fixed: Now uses init_database() for proper schema sync
 """
 
 from fastapi import FastAPI
@@ -45,6 +48,43 @@ async def lifespan(app: FastAPI):
         print("✓ Nebius API key configured")
     
     # ============================================
+    # AUTO-CREATE DATABASE TABLES + SYNC SCHEMA
+    # ============================================
+    print("\n" + "-" * 40)
+    print("Initializing Database...")
+    print("-" * 40)
+    
+    try:
+        from backend.database.connection import init_database
+        
+        # Initialize database - creates tables AND adds any missing columns
+        # This ensures the schema matches the models even for existing databases
+        if init_database():
+            print("✓ Database initialized and schema synchronized")
+        else:
+            print("⚠ Database initialization had issues (check logs above)")
+    except Exception as e:
+        print(f"⚠ Database initialization failed: {e}")
+        print("  (App will continue but some features may not work)")
+    
+    # Create Knowledge Base tables
+    try:
+        from backend.database.knowledge_tables import create_knowledge_tables
+        from backend.database.connection import engine
+        
+        # Get a raw connection for table creation
+        with engine.connect() as conn:
+            # Check if using PostgreSQL
+            use_postgres = 'postgresql' in str(engine.url)
+            create_knowledge_tables(conn, use_postgres=use_postgres)
+            conn.commit()
+        print("✓ Knowledge Base tables verified/created")
+    except ImportError:
+        print("⚠ Knowledge Base tables module not found (optional)")
+    except Exception as e:
+        print(f"⚠ Knowledge Base tables creation failed: {e}")
+    
+    # ============================================
     # AUTO-INITIALIZE SERVICES (Week 3 Day 3)
     # ============================================
     print("\n" + "-" * 40)
@@ -52,6 +92,7 @@ async def lifespan(app: FastAPI):
     print("-" * 40)
     
     # 1. Initialize LLM Router (required by other services)
+    llm_router = None
     try:
         from backend.services.llm_router import get_llm_router
         llm_router = get_llm_router()
@@ -60,7 +101,6 @@ async def lifespan(app: FastAPI):
         print(f"  Available providers: {llm_router.get_available_providers()}")
     except Exception as e:
         print(f"⚠ LLM Router initialization failed: {e}")
-        llm_router = None
     
     # 2. Initialize Memory Service
     try:
@@ -79,8 +119,12 @@ async def lifespan(app: FastAPI):
             from backend.services.reflection_service import initialize_reflection_service
             from backend.services.philosophy_loader import philosophy_loader
             
-            # Load philosophy text for grounding
-            philosophy_text = philosophy_loader.get_combined_philosophy()
+            # Load philosophy text for grounding - handle both old and new API
+            try:
+                philosophy_text = philosophy_loader.get_combined_philosophy()
+            except AttributeError:
+                # Fallback for older API
+                philosophy_text = philosophy_loader.load_base_philosophy()
             
             reflection_service = initialize_reflection_service(
                 llm_router=llm_router,
@@ -120,19 +164,73 @@ async def lifespan(app: FastAPI):
         from backend.services.project_service import get_project_service
         project_service = get_project_service()
         
-        # Check if Wisdom Sessions project exists
-        existing = project_service.get_project("Wisdom Sessions")
-        if not existing:
-            project_service.create_project(
-                name="Wisdom Sessions",
-                project_type="wisdom",
-                description="Default project for wisdom-focused conversations"
-            )
-            print("✓ Created default 'Wisdom Sessions' project")
-        else:
-            print("✓ Default 'Wisdom Sessions' project exists")
+        if project_service:
+            # Check if Wisdom Sessions project exists
+            existing = project_service.get_project("Wisdom Sessions")
+            if not existing:
+                project_service.create_project(
+                    name="Wisdom Sessions",
+                    project_type="wisdom",
+                    description="Default project for wisdom-focused conversations"
+                )
+                print("✓ Created default 'Wisdom Sessions' project")
+            else:
+                print("✓ Default 'Wisdom Sessions' project exists")
     except Exception as e:
         print(f"⚠ Could not create default project: {e}")
+    
+    # 7. Initialize Session FactCheck Service (Phase 3)
+    try:
+        from backend.services.session_factcheck_service import get_session_factcheck_service
+        factcheck_service = get_session_factcheck_service()
+        if factcheck_service.is_initialized():
+            print("✓ Session FactCheck Service initialized")
+    except ImportError:
+        print("⚠ Session FactCheck Service not found (optional)")
+    except Exception as e:
+        print(f"⚠ Session FactCheck Service initialization failed: {e}")
+    
+    # 8. Initialize Spending Service
+    try:
+        from backend.services.spending_service import get_spending_service
+        spending_service = get_spending_service()
+        if spending_service:
+            print("✓ Spending Service initialized")
+    except ImportError:
+        print("⚠ Spending Service not found (optional)")
+    except Exception as e:
+        print(f"⚠ Spending Service initialization failed: {e}")
+    
+    # 9. Initialize Knowledge Base Service
+    try:
+        from backend.services.knowledge_service import get_knowledge_service
+        kb_service = get_knowledge_service()
+        
+        # Get database connection for KB
+        try:
+            from backend.database.connection import get_db
+            db = next(get_db())
+        except:
+            db = None
+        
+        # Get spending service for cost tracking
+        try:
+            from backend.services.spending_service import get_spending_service
+            spending = get_spending_service()
+        except:
+            spending = None
+        
+        if kb_service:
+            kb_service.initialize(
+                db_connection=db,
+                spending_service=spending,
+                llm_router=llm_router
+            )
+            print("✓ Knowledge Base Service initialized")
+    except ImportError:
+        print("⚠ Knowledge Base Service not found (optional)")
+    except Exception as e:
+        print(f"⚠ Knowledge Base Service initialization failed: {e}")
     
     print("-" * 40)
     print("Service initialization complete")
@@ -143,7 +241,7 @@ async def lifespan(app: FastAPI):
     print("=" * 60)
     print("🚀 Wisdom Agent Ready!")
     print(f"📍 Running at http://{config.HOST}:{config.PORT}")
-    print("📚 API docs at http://{config.HOST}:{config.PORT}/docs")
+    print(f"📚 API docs at http://{config.HOST}:{config.PORT}/docs")
     print("=" * 60)
     
     yield  # Server runs here
@@ -170,7 +268,7 @@ app = FastAPI(
     1. How can AI best help humans select for wisdom?
     2. How can AI pursue this without overstepping?
     """,
-    version="2.0.0",
+    version="2.1.0",
     lifespan=lifespan,
 )
 
@@ -192,7 +290,7 @@ async def root():
     return {
         "status": "healthy",
         "service": "Wisdom Agent",
-        "version": "2.0.0",
+        "version": "2.1.0",
         "philosophy": "Something Deeperism",
     }
 
@@ -230,6 +328,27 @@ async def health_check():
     except:
         services_status["conversation"] = False
     
+    try:
+        from backend.services.session_factcheck_service import get_session_factcheck_service
+        factcheck = get_session_factcheck_service()
+        services_status["session_factcheck"] = factcheck is not None and factcheck.is_initialized()
+    except:
+        services_status["session_factcheck"] = False
+    
+    try:
+        from backend.services.spending_service import get_spending_service
+        spending = get_spending_service()
+        services_status["spending"] = spending is not None
+    except:
+        services_status["spending"] = False
+    
+    try:
+        from backend.services.knowledge_service import get_knowledge_service
+        kb = get_knowledge_service()
+        services_status["knowledge_base"] = kb is not None
+    except:
+        services_status["knowledge_base"] = False
+    
     return {
         "status": "healthy",
         "services": services_status,
@@ -252,7 +371,11 @@ async def get_philosophy_info():
     }
 
 
-# Include routers
+# ============================================
+# INCLUDE ROUTERS
+# ============================================
+
+# Core routers
 from backend.routers.chat import router as chat_router
 from backend.routers.memory import router as memory_router
 from backend.routers.sessions import router as sessions_router
@@ -261,15 +384,33 @@ from backend.routers.files import router as files_router
 from backend.routers.pedagogy import router as pedagogy_router
 from backend.routers.reflection import router as reflection_router
 from backend.routers.review_router import router as review_router
+from backend.routers.session_factcheck_router import router as session_factcheck_router
 
 app.include_router(chat_router, prefix="/api/chat", tags=["Chat"])
-app.include_router(memory_router, tags=["Memory"])  # Already has /api/memory prefix
-app.include_router(sessions_router, tags=["Sessions"])  # Already has /api/sessions prefix
-app.include_router(projects_router, tags=["Projects"])  # Already has /api/projects prefix
-app.include_router(files_router, tags=["Files"])  # Already has /api/files prefix
-app.include_router(pedagogy_router, tags=["Pedagogy"])  # Already has /api/pedagogy prefix
-app.include_router(reflection_router, tags=["Reflection"])  # Already has /api/reflection prefix
-app.include_router(review_router)  # Already has /api/reviews prefix
+app.include_router(memory_router, tags=["Memory"])
+app.include_router(sessions_router, tags=["Sessions"])
+app.include_router(projects_router, tags=["Projects"])
+app.include_router(files_router, tags=["Files"])
+app.include_router(pedagogy_router, tags=["Pedagogy"])
+app.include_router(reflection_router, tags=["Reflection"])
+app.include_router(review_router, tags=["Reviews"])
+app.include_router(session_factcheck_router, tags=["Session FactCheck"])
+
+# Spending router
+try:
+    from backend.routers.spending import router as spending_router
+    app.include_router(spending_router, tags=["Spending"])
+    print("✓ Spending router registered")
+except ImportError as e:
+    print(f"⚠ Spending router not available: {e}")
+
+# Knowledge Base router
+try:
+    from backend.routers.knowledge import router as knowledge_router
+    app.include_router(knowledge_router, tags=["Knowledge Base"])
+    print("✓ Knowledge Base router registered")
+except ImportError as e:
+    print(f"⚠ Knowledge Base router not available: {e}")
 
 
 if __name__ == "__main__":

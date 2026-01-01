@@ -3,9 +3,11 @@ Wisdom Agent - Database Connection Management
 
 Handles PostgreSQL connection, session management, and pgvector setup.
 SQLite fallback is available for testing when PostgreSQL is unavailable.
+
+Updated 2025-12-30: Added sync_schema() to automatically add missing columns.
 """
 
-from sqlalchemy import create_engine, event, text
+from sqlalchemy import create_engine, event, text, inspect
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.pool import NullPool, StaticPool
@@ -56,7 +58,7 @@ def init_pgvector_extension():
     Skipped when using SQLite.
     """
     if USE_SQLITE:
-        logger.info("⏭️  Skipping pgvector extension (SQLite mode)")
+        logger.info("⭕ Skipping pgvector extension (SQLite mode)")
         return
         
     try:
@@ -102,11 +104,127 @@ def get_db_session() -> Session:
     return SessionLocal()
 
 
+def sync_schema():
+    """
+    Synchronize database schema by adding any missing columns.
+    
+    This handles the case where models have been updated with new columns
+    but existing databases don't have them. SQLAlchemy's create_all() only
+    creates new tables, it doesn't add columns to existing tables.
+    
+    This function inspects all models and adds any missing columns.
+    Safe to run multiple times (idempotent).
+    """
+    # Import models to ensure they're all registered
+    from backend.database import models
+    
+    inspector = inspect(engine)
+    
+    # Get all tables defined in our models
+    for table_name, table in Base.metadata.tables.items():
+        # Check if table exists in database
+        if not inspector.has_table(table_name):
+            # Table doesn't exist, create_all will handle it
+            continue
+        
+        # Get existing columns in database
+        existing_columns = {col['name'] for col in inspector.get_columns(table_name)}
+        
+        # Get columns defined in model
+        model_columns = {col.name for col in table.columns}
+        
+        # Find missing columns
+        missing_columns = model_columns - existing_columns
+        
+        if missing_columns:
+            logger.info(f"📊 Table '{table_name}' missing columns: {missing_columns}")
+            
+            # Add each missing column
+            with engine.connect() as conn:
+                for col_name in missing_columns:
+                    col = table.columns[col_name]
+                    
+                    # Determine SQL type
+                    col_type = _get_sql_type(col)
+                    
+                    # Build ALTER TABLE statement
+                    nullable = "NULL" if col.nullable else "NOT NULL"
+                    default = ""
+                    if col.default is not None:
+                        default = f" DEFAULT {_get_default_value(col)}"
+                    
+                    # For NOT NULL columns without defaults, we need to allow NULL first
+                    # then update, then set NOT NULL (if there's existing data)
+                    if not col.nullable and col.default is None:
+                        # Add as nullable first to handle existing rows
+                        sql = f'ALTER TABLE "{table_name}" ADD COLUMN IF NOT EXISTS "{col_name}" {col_type} NULL'
+                    else:
+                        sql = f'ALTER TABLE "{table_name}" ADD COLUMN IF NOT EXISTS "{col_name}" {col_type} {nullable}{default}'
+                    
+                    try:
+                        conn.execute(text(sql))
+                        conn.commit()
+                        logger.info(f"  ✅ Added column '{col_name}' to '{table_name}'")
+                    except Exception as e:
+                        logger.warning(f"  ⚠️  Could not add column '{col_name}': {e}")
+
+
+def _get_sql_type(column) -> str:
+    """Convert SQLAlchemy column type to SQL type string."""
+    from sqlalchemy import Integer, String, Text, Boolean, Float, DateTime, JSON, Enum, LargeBinary
+    
+    col_type = type(column.type)
+    
+    if col_type == Integer:
+        return "INTEGER"
+    elif col_type == String:
+        length = getattr(column.type, 'length', 255) or 255
+        return f"VARCHAR({length})"
+    elif col_type == Text:
+        return "TEXT"
+    elif col_type == Boolean:
+        return "BOOLEAN"
+    elif col_type == Float:
+        return "FLOAT"
+    elif col_type == DateTime:
+        return "TIMESTAMP"
+    elif col_type == JSON:
+        return "JSON" if not USE_SQLITE else "TEXT"
+    elif col_type == LargeBinary:
+        return "BYTEA" if not USE_SQLITE else "BLOB"
+    elif hasattr(column.type, 'impl'):
+        # Handle Enum types
+        return "VARCHAR(100)"
+    else:
+        # Default fallback
+        return "TEXT"
+
+
+def _get_default_value(column) -> str:
+    """Get SQL default value for a column."""
+    if column.default is None:
+        return "NULL"
+    
+    default = column.default.arg
+    if callable(default):
+        return "NULL"  # Can't translate Python functions to SQL defaults
+    elif isinstance(default, bool):
+        return "TRUE" if default else "FALSE"
+    elif isinstance(default, (int, float)):
+        return str(default)
+    elif isinstance(default, str):
+        return f"'{default}'"
+    else:
+        return "NULL"
+
+
 def init_database():
     """
     Initialize the database schema.
     
-    Creates all tables defined in models.py if they don't exist.
+    Creates all tables defined in models.py if they don't exist,
+    then syncs schema to add any missing columns.
+    Also ensures a default user exists for the application.
     Should be called on application startup.
     """
     try:
@@ -116,14 +234,59 @@ def init_database():
         # Enable pgvector extension
         init_pgvector_extension()
         
-        # Create all tables
+        # Create all tables (only creates new tables, doesn't modify existing)
         Base.metadata.create_all(bind=engine)
         logger.info("✅ Database tables initialized")
+        
+        # Sync schema to add any missing columns to existing tables
+        sync_schema()
+        logger.info("✅ Database schema synchronized")
+        
+        # Ensure default user exists
+        _ensure_default_user()
         
         return True
     except Exception as e:
         logger.error(f"❌ Failed to initialize database: {e}")
         return False
+
+
+def _ensure_default_user():
+    """
+    Ensure a default user exists in the database.
+    
+    Many parts of the app currently use user_id=1 as a placeholder
+    until proper authentication is implemented. This function ensures
+    that user exists so foreign key constraints don't fail.
+    """
+    try:
+        from backend.database.models import User
+        
+        session = SessionLocal()
+        try:
+            # Check if user with ID 1 exists
+            user = session.query(User).filter(User.id == 1).first()
+            
+            if not user:
+                # Create default user
+                default_user = User(
+                    id=1,
+                    username="default_user",
+                    email="default@wisdomagent.local",
+                    hashed_password="not_a_real_password",  # Placeholder
+                    full_name="Default User",
+                    is_active=True,
+                    is_verified=True,
+                )
+                session.add(default_user)
+                session.commit()
+                logger.info("✅ Created default user (id=1)")
+            else:
+                logger.info("✅ Default user exists")
+        finally:
+            session.close()
+    except Exception as e:
+        logger.warning(f"⚠️  Could not ensure default user: {e}")
 
 
 def check_database_connection() -> bool:

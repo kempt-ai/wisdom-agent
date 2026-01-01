@@ -13,13 +13,141 @@ import {
   Plus,
   Sun,
   Moon,
-  History,  // NEW - icon for Sessions
+  History,
+  CheckCircle,
+  Archive,
+  DollarSign,
+  AlertTriangle,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getProjects, type Project } from '@/lib/api';
 
+// API base URL - adjust if needed
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+
 interface SidebarProps {
   className?: string;
+}
+
+interface SpendingData {
+  month_display: string;
+  total_spent: number;
+  limit: number;
+  percentage_used: number;
+  at_warning: boolean;
+}
+
+// Spending Widget Component
+function SpendingWidget() {
+  const [spending, setSpending] = useState<SpendingData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    // Fetch spending data from backend
+    const fetchSpending = async () => {
+      try {
+        const response = await fetch(`${API_BASE}/spending/dashboard?user_id=1`);
+        if (response.ok) {
+          const data = await response.json();
+          setSpending(data);
+          setError(false);
+        } else {
+          setError(true);
+        }
+      } catch (err) {
+        console.error('Failed to fetch spending data:', err);
+        setError(true);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchSpending();
+    
+    // Refresh every 60 seconds
+    const interval = setInterval(fetchSpending, 60000);
+    return () => clearInterval(interval);
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="px-4 py-3">
+        <div className="h-12 bg-stone-100 dark:bg-stone-800 rounded-lg animate-pulse" />
+      </div>
+    );
+  }
+
+  if (error || !spending) {
+    return null; // Silently hide if spending service isn't available
+  }
+
+  const percentageWidth = Math.min(spending.percentage_used, 100);
+  
+  // Color based on usage
+  const getBarColor = () => {
+    if (spending.percentage_used >= 100) return 'bg-red-500';
+    if (spending.at_warning) return 'bg-amber-500';
+    return 'bg-emerald-500';
+  };
+
+  const getTextColor = () => {
+    if (spending.percentage_used >= 100) return 'text-red-600 dark:text-red-400';
+    if (spending.at_warning) return 'text-amber-600 dark:text-amber-400';
+    return 'text-stone-600 dark:text-stone-400';
+  };
+
+  return (
+    <Link
+      href="/settings#spending"
+      className="block px-4 py-2 no-underline group"
+    >
+      <div className={cn(
+        "p-3 rounded-lg transition-colors duration-150",
+        "bg-stone-50 dark:bg-stone-800/50",
+        "hover:bg-stone-100 dark:hover:bg-stone-800",
+        "border border-stone-200 dark:border-stone-700"
+      )}>
+        {/* Header row */}
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-2">
+            <DollarSign className={cn("w-4 h-4", getTextColor())} />
+            <span className="text-xs font-medium text-stone-500 dark:text-stone-400">
+              {spending.month_display}
+            </span>
+          </div>
+          {spending.at_warning && (
+            <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
+          )}
+        </div>
+
+        {/* Amount display */}
+        <div className="flex items-baseline gap-1 mb-2">
+          <span className={cn("text-lg font-semibold", getTextColor())}>
+            ${spending.total_spent.toFixed(2)}
+          </span>
+          <span className="text-xs text-stone-400 dark:text-stone-500">
+            / ${spending.limit.toFixed(0)}
+          </span>
+        </div>
+
+        {/* Progress bar */}
+        <div className="h-1.5 bg-stone-200 dark:bg-stone-700 rounded-full overflow-hidden">
+          <div
+            className={cn("h-full rounded-full transition-all duration-300", getBarColor())}
+            style={{ width: `${percentageWidth}%` }}
+          />
+        </div>
+
+        {/* Percentage label */}
+        <div className="mt-1 text-right">
+          <span className={cn("text-xs font-medium", getTextColor())}>
+            {spending.percentage_used.toFixed(0)}% used
+          </span>
+        </div>
+      </div>
+    </Link>
+  );
 }
 
 export function Sidebar({ className }: SidebarProps) {
@@ -29,9 +157,13 @@ export function Sidebar({ className }: SidebarProps) {
   const [darkMode, setDarkMode] = useState(false);
 
   useEffect(() => {
-    // Load projects
+    // Load projects (excluding archived)
     getProjects()
-      .then(setProjects)
+      .then((allProjects) => {
+        // Filter out archived projects for the sidebar
+        const activeProjects = allProjects.filter(p => !p.is_archived);
+        setProjects(activeProjects);
+      })
       .catch(console.error);
   }, []);
 
@@ -54,11 +186,15 @@ export function Sidebar({ className }: SidebarProps) {
       href: '/chat',
       icon: MessageSquare,
     },
-    // NEW - Wisdom Sessions link (Week 3 Day 4)
     {
       name: 'Wisdom Sessions',
       href: '/sessions',
       icon: History,
+    },
+    {
+      name: 'Fact Checker',
+      href: '/fact-checker',
+      icon: CheckCircle,
     },
     {
       name: 'Projects',
@@ -155,6 +291,19 @@ export function Sidebar({ className }: SidebarProps) {
                         {project.name}
                       </Link>
                     ))}
+                    {/* Archived Projects Link */}
+                    <Link
+                      href="/projects/archived"
+                      className={cn(
+                        'flex items-center gap-2 px-3 py-2 rounded-lg text-sm no-underline',
+                        pathname === '/projects/archived'
+                          ? 'bg-stone-200 dark:bg-stone-700 text-stone-700 dark:text-stone-300'
+                          : 'text-stone-400 dark:text-stone-500 hover:bg-stone-200 dark:hover:bg-stone-800'
+                      )}
+                    >
+                      <Archive className="w-4 h-4" />
+                      Archived
+                    </Link>
                     <Link
                       href="/projects/new"
                       className={cn(
@@ -191,9 +340,13 @@ export function Sidebar({ className }: SidebarProps) {
         })}
       </nav>
 
-      {/* Footer */}
-      <div className="p-4 border-t border-stone-200 dark:border-stone-800">
-        <div className="flex items-center justify-between">
+      {/* Footer - Spending Widget + Settings */}
+      <div className="border-t border-stone-200 dark:border-stone-800">
+        {/* Spending Widget */}
+        <SpendingWidget />
+        
+        {/* Settings row */}
+        <div className="p-4 pt-2 flex items-center justify-between">
           <Link
             href="/settings"
             className={cn(

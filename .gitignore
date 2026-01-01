@@ -1,1 +1,19 @@
 .env
+
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+data/memory/
+data/conversations/
+data/spending/
+data/session_counter.json
+*.sqlite3
+chroma.sqlite3
+node_modules/
+.next/
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+Old Summaries/

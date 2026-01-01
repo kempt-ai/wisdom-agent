@@ -8,11 +8,22 @@ import {
   startSession as apiStartSession,
   addMessageToSession,
   endSession as apiEndSession,
+  triggerFactCheck,  // NEW
   type Message,
   type SessionEndResult,
 } from '@/lib/api';
 import { cn, formatTime } from '@/lib/utils';
-import { Sparkles, AlertCircle, RefreshCw, StopCircle, X, FileText, Star } from 'lucide-react';
+import { 
+  Sparkles, 
+  AlertCircle, 
+  RefreshCw, 
+  StopCircle, 
+  X, 
+  FileText, 
+  Star,
+  CheckCircle,  // NEW - for fact check button
+  Loader2,      // NEW - for loading state
+} from 'lucide-react';
 
 interface ChatInterfaceProps {
   sessionId?: string;
@@ -33,6 +44,13 @@ interface SessionReport {
     text: string;
     scores: Record<string, number>;
   };
+}
+
+// NEW - Fact check result interface
+interface FactCheckResult {
+  review_id: number;
+  status: string;
+  poll_url?: string;
 }
 
 export function ChatInterface({
@@ -56,6 +74,14 @@ export function ChatInterface({
   const [isEndingSession, setIsEndingSession] = useState(false);
   const [sessionReport, setSessionReport] = useState<SessionReport | null>(null);
   const [showReportModal, setShowReportModal] = useState(false);
+  
+  // NEW - Fact check state
+  const [showFactCheckModal, setShowFactCheckModal] = useState(false);
+  const [factCheckContent, setFactCheckContent] = useState('');
+  const [factCheckType, setFactCheckType] = useState<'text' | 'url'>('text');
+  const [isFactChecking, setIsFactChecking] = useState(false);
+  const [factCheckResult, setFactCheckResult] = useState<FactCheckResult | null>(null);
+  
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Scroll to bottom when messages change
@@ -195,6 +221,43 @@ export function ChatInterface({
     setSessionId(null);
   };
 
+  // NEW - Handle fact check submission
+  const handleFactCheck = async () => {
+    if (!factCheckContent.trim() || !sessionId) return;
+    
+    setIsFactChecking(true);
+    setError(null);
+    
+    try {
+      const result = await triggerFactCheck(
+        sessionId,
+        factCheckContent,
+        factCheckType,
+        factCheckType === 'url' ? factCheckContent : undefined
+      );
+      
+      setFactCheckResult(result);
+      
+      // Add a system message about the fact check
+      const factCheckMessage: DisplayMessage = {
+        role: 'assistant',
+        content: `🔍 **Fact Check Initiated**\n\nI've started analyzing ${factCheckType === 'url' ? 'the article at that URL' : 'your claim'}. The analysis is running in the background.\n\n[View Fact Check Results](/fact-checker/${result.review_id})`,
+        timestamp: formatTime(new Date()),
+        id: `factcheck-${Date.now()}`,
+      };
+      setMessages((prev) => [...prev, factCheckMessage]);
+      
+      // Reset and close modal
+      setFactCheckContent('');
+      setShowFactCheckModal(false);
+    } catch (err) {
+      console.error('Fact check error:', err);
+      setError(err instanceof Error ? err.message : 'Failed to start fact check');
+    } finally {
+      setIsFactChecking(false);
+    }
+  };
+
   // Format scores for display
   const formatScores = (scores: Record<string, number>) => {
     const valueOrder = [
@@ -219,57 +282,34 @@ export function ChatInterface({
       <div className="flex-1 overflow-y-auto px-6 py-8 space-y-6 scrollbar-hide">
         {messages.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-center">
-            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-wisdom-100 to-gold-100 dark:from-wisdom-900 dark:to-gold-900 flex items-center justify-center mb-6">
+            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-wisdom-100 to-wisdom-200 dark:from-wisdom-900 dark:to-wisdom-800 flex items-center justify-center mb-6">
               <Sparkles className="w-8 h-8 text-wisdom-600 dark:text-wisdom-400" />
             </div>
-            <h2 className="text-2xl font-serif font-medium text-stone-800 dark:text-stone-200 mb-3">
-              Begin Your Journey
+            <h2 className="text-xl font-serif font-medium text-stone-900 dark:text-stone-100 mb-2">
+              Welcome to Wisdom Agent
             </h2>
-            <p className="text-stone-500 dark:text-stone-400 max-w-md text-balance">
-              I'm here to help you grow in wisdom through the lens of Something Deeperism. 
-              What would you like to explore today?
+            <p className="text-stone-500 dark:text-stone-400 max-w-md">
+              Start a conversation grounded in wisdom. Share your thoughts, ask questions, 
+              or explore ideas together.
             </p>
-            <div className="mt-8 flex flex-wrap gap-3 justify-center">
-              {[
-                'What is Something Deeperism?',
-                'Help me understand the 7 Universal Values',
-                'I want to learn about wisdom',
-              ].map((suggestion) => (
-                <button
-                  key={suggestion}
-                  onClick={() => handleSend(suggestion)}
-                  className={cn(
-                    'px-4 py-2 rounded-full text-sm',
-                    'bg-stone-100 dark:bg-stone-800',
-                    'text-stone-600 dark:text-stone-300',
-                    'hover:bg-wisdom-100 dark:hover:bg-wisdom-900/30',
-                    'hover:text-wisdom-700 dark:hover:text-wisdom-300',
-                    'transition-colors duration-200'
-                  )}
-                >
-                  {suggestion}
-                </button>
-              ))}
-            </div>
           </div>
         ) : (
-          <>
-            {messages.map((message) => (
-              <ChatMessage
-                key={message.id}
-                role={message.role}
-                content={message.content}
-                timestamp={message.timestamp}
-              />
-            ))}
-            {isLoading && (
-              <ChatMessage
-                role="assistant"
-                content=""
-                isLoading
-              />
-            )}
-          </>
+          messages.map((message) => (
+            <ChatMessage
+              key={message.id}
+              role={message.role}
+              content={message.content}
+              timestamp={message.timestamp}
+            />
+          ))
+        )}
+        {isLoading && (
+          <div className="flex items-center gap-3 text-stone-400 dark:text-stone-500">
+            <div className="w-8 h-8 rounded-full bg-wisdom-100 dark:bg-wisdom-900/30 flex items-center justify-center">
+              <Sparkles className="w-4 h-4 text-wisdom-600 dark:text-wisdom-400 animate-pulse" />
+            </div>
+            <span className="text-sm">Contemplating...</span>
+          </div>
         )}
         <div ref={messagesEndRef} />
       </div>
@@ -293,7 +333,7 @@ export function ChatInterface({
         </div>
       )}
 
-      {/* Input area with End Session button */}
+      {/* Input area with End Session and Fact Check buttons */}
       <div className="p-6 border-t border-stone-200 dark:border-stone-800 bg-stone-50 dark:bg-stone-950">
         <div className="flex items-center gap-3">
           <div className="flex-1">
@@ -303,6 +343,26 @@ export function ChatInterface({
               placeholder="Share your thoughts or ask a question..."
             />
           </div>
+          
+          {/* NEW - Fact Check Button */}
+          {sessionId && (
+            <button
+              onClick={() => setShowFactCheckModal(true)}
+              disabled={isLoading}
+              className={cn(
+                'px-4 py-3 rounded-xl flex items-center gap-2',
+                'bg-emerald-100 dark:bg-emerald-900/30',
+                'text-emerald-700 dark:text-emerald-300',
+                'hover:bg-emerald-200 dark:hover:bg-emerald-900/50',
+                'transition-colors duration-200',
+                'disabled:opacity-50 disabled:cursor-not-allowed'
+              )}
+              title="Fact Check"
+            >
+              <CheckCircle className="w-5 h-5" />
+              <span className="hidden sm:inline">Fact Check</span>
+            </button>
+          )}
           
           {/* End Session Button */}
           {messages.length > 0 && (
@@ -326,6 +386,117 @@ export function ChatInterface({
           )}
         </div>
       </div>
+
+      {/* NEW - Fact Check Modal */}
+      {showFactCheckModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-stone-900 rounded-2xl max-w-lg w-full p-6 shadow-xl">
+            <div className="flex items-start justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
+                  <CheckCircle className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+                </div>
+                <h3 className="text-lg font-serif font-medium text-stone-900 dark:text-stone-100">
+                  Fact Check
+                </h3>
+              </div>
+              <button
+                onClick={() => setShowFactCheckModal(false)}
+                className="text-stone-400 hover:text-stone-600 dark:hover:text-stone-300"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <p className="text-stone-600 dark:text-stone-400 mb-4">
+              Analyze a claim or article for factual accuracy, logical soundness, and wisdom alignment.
+            </p>
+            
+            {/* Type selector */}
+            <div className="flex gap-2 mb-4">
+              <button
+                onClick={() => setFactCheckType('text')}
+                className={cn(
+                  'flex-1 px-4 py-2 rounded-lg text-sm font-medium transition-colors',
+                  factCheckType === 'text'
+                    ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300'
+                    : 'bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-400 hover:bg-stone-200'
+                )}
+              >
+                Text/Claim
+              </button>
+              <button
+                onClick={() => setFactCheckType('url')}
+                className={cn(
+                  'flex-1 px-4 py-2 rounded-lg text-sm font-medium transition-colors',
+                  factCheckType === 'url'
+                    ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300'
+                    : 'bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-400 hover:bg-stone-200'
+                )}
+              >
+                URL/Article
+              </button>
+            </div>
+            
+            {/* Input */}
+            <textarea
+              value={factCheckContent}
+              onChange={(e) => setFactCheckContent(e.target.value)}
+              placeholder={factCheckType === 'url' ? 'Paste article URL...' : 'Enter a claim to fact-check...'}
+              className={cn(
+                'w-full h-32 px-4 py-3 rounded-xl resize-none',
+                'bg-stone-50 dark:bg-stone-800',
+                'border border-stone-200 dark:border-stone-700',
+                'text-stone-900 dark:text-stone-100',
+                'placeholder:text-stone-400 dark:placeholder:text-stone-500',
+                'focus:outline-none focus:ring-2 focus:ring-emerald-500/50',
+                'transition-colors'
+              )}
+            />
+            
+            <div className="flex gap-3 mt-4">
+              <button
+                onClick={() => setShowFactCheckModal(false)}
+                disabled={isFactChecking}
+                className={cn(
+                  'flex-1 px-4 py-2 rounded-xl',
+                  'bg-stone-100 dark:bg-stone-800',
+                  'text-stone-700 dark:text-stone-300',
+                  'hover:bg-stone-200 dark:hover:bg-stone-700',
+                  'transition-colors duration-200',
+                  'disabled:opacity-50'
+                )}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleFactCheck}
+                disabled={isFactChecking || !factCheckContent.trim()}
+                className={cn(
+                  'flex-1 px-4 py-2 rounded-xl',
+                  'bg-emerald-600 dark:bg-emerald-500',
+                  'text-white',
+                  'hover:bg-emerald-700 dark:hover:bg-emerald-600',
+                  'transition-colors duration-200',
+                  'disabled:opacity-50 flex items-center justify-center gap-2'
+                )}
+              >
+                {isFactChecking ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Analyzing...
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle className="w-4 h-4" />
+                    Start Analysis
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* End Session Confirmation Modal */}
       {showEndSessionModal && (

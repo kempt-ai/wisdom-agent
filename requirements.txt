@@ -1,47 +1,72 @@
-# Wisdom Agent - Python Dependencies
+# Wisdom Agent Backend Requirements
+# Python 3.11+
 
-# ===========================================
-# Core Framework
-# ===========================================
-fastapi>=0.109.0
-uvicorn[standard]>=0.27.0
+# ============================================================================
+# CORE FRAMEWORK
+# ============================================================================
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
 pydantic>=2.5.0
-python-dotenv>=1.0.0
+python-multipart>=0.0.6      # File uploads
 
-# ===========================================
-# LLM Providers
-# ===========================================
-anthropic>=0.18.0
-openai>=1.10.0
+# ============================================================================
+# DATABASE
+# ============================================================================
+sqlalchemy>=2.0.0
+psycopg2-binary>=2.9.9       # PostgreSQL driver
+# pgvector>=0.2.0            # Uncomment for vector search (requires PostgreSQL extension)
 
-# ===========================================
-# Vector Database (Week 1 - ChromaDB)
-# ===========================================
-chromadb>=0.4.22
-sentence-transformers>=2.3.0  # For embeddings generation
+# ============================================================================
+# LLM PROVIDERS
+# ============================================================================
+anthropic>=0.18.0            # Claude
+openai>=1.12.0               # GPT models
+google-generativeai>=0.4.0   # Gemini
 
-# ===========================================
-# Database (Week 2 - PostgreSQL)
-# ===========================================
-psycopg2-binary>=2.9.9
-sqlalchemy>=2.0.25
-pgvector>=0.2.4
-alembic>=1.13.0  # Database migrations
+# ============================================================================
+# URL CONTENT EXTRACTION (Knowledge Base)
+# ============================================================================
+httpx>=0.24.0                # Async HTTP client
+trafilatura>=1.6.0           # Article extraction (high quality)
+beautifulsoup4>=4.12.0       # HTML parsing fallback
+lxml>=4.9.0                  # Fast XML/HTML parser
 
-# ===========================================
-# File Processing
-# ===========================================
-python-multipart>=0.0.6
-PyPDF2>=3.0.0
-python-docx>=1.1.0
+# PDF Support
+pypdf>=3.0.0                 # PDF text extraction
+# pdfplumber>=0.10.0         # Alternative PDF extraction (optional)
 
-# ===========================================
-# Utilities
-# ===========================================
-httpx>=0.26.0
+# Encoding Detection
+chardet>=5.0.0               # Automatic encoding detection
 
-# ===========================================
-# Development
-# ===========================================
+# ============================================================================
+# VECTOR MEMORY & EMBEDDINGS
+# ============================================================================
+chromadb>=0.4.0              # Vector database
+tiktoken>=0.5.0              # Token counting
+sentence-transformers>=2.2.0 # Embeddings (optional, for local models)
+
+# ============================================================================
+# FACT CHECKING (Optional)
+# ============================================================================
+# requests>=2.31.0           # For external API calls (httpx preferred)
+
+# ============================================================================
+# UTILITIES
+# ============================================================================
+python-dotenv>=1.0.0         # Environment variables
+pyyaml>=6.0.0                # YAML config files
+aiofiles>=23.0.0             # Async file operations
+
+# ============================================================================
+# DEVELOPMENT & TESTING
+# ============================================================================
 pytest>=7.4.0
-pytest-asyncio>=0.23.0
+pytest-asyncio>=0.21.0
+httpx>=0.24.0                # For testing FastAPI
+
+# ============================================================================
+# OPTIONAL ENHANCEMENTS
+# ============================================================================
+# redis>=5.0.0               # Caching
+# celery>=5.3.0              # Background tasks
+# boto3>=1.34.0              # AWS integration
