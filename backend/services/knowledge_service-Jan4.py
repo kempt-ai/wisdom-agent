@@ -158,9 +158,9 @@ class KnowledgeBaseService:
     def _ensure_tables(self):
         """Ensure knowledge base tables exist"""
         try:
-            from backend.database.knowledge_tables import create_knowledge_tables
+            from database.knowledge_tables import create_knowledge_tables
             # Detect database type
-            is_postgres = hasattr(self.db, 'bind') and 'postgres' in str(self.db.bind.url)
+            is_postgres = hasattr(self.db, 'dialect') and 'postgres' in str(self.db.dialect.name)
             create_knowledge_tables(self.db, use_postgres=is_postgres)
         except Exception as e:
             logger.warning(f"Could not auto-create tables: {e}")
@@ -178,8 +178,8 @@ class KnowledgeBaseService:
             for i, p in enumerate(params):
                 new_query = new_query.replace('?', f':p{i}', 1)
                 param_dict[f'p{i}'] = p
-            return self.db.execute(text(new_query), param_dict)
-        return self.db.execute(text(query))
+            return self._exec(text(new_query), param_dict)
+        return self._exec(text(query))
     
     # ========================================================================
     # TOKEN ESTIMATION

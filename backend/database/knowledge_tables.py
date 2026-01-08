@@ -159,7 +159,7 @@ class KnowledgeResource(Base):
     index_error = Column(Text, nullable=True)  # Error message if failed
     
     visibility = Column(String(20), default="private")
-    metadata = Column(JSON, default=dict)  # Flexible metadata
+    resource_metadata = Column('metadata', JSON, default=dict)  # 'metadata' is reserved in SQLAlchemy, so use different attr name
     
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -346,14 +346,14 @@ CREATE INDEX IF NOT EXISTS idx_resource_collection ON knowledge_resources(collec
 CREATE INDEX IF NOT EXISTS idx_resource_user_type ON knowledge_resources(user_id, resource_type);
 CREATE INDEX IF NOT EXISTS idx_resource_status ON knowledge_resources(index_status);
 
--- Resource Indexes (with pgvector support)
+-- Resource Indexes (embedding stored as JSONB for compatibility)
 CREATE TABLE IF NOT EXISTS resource_indexes (
     id SERIAL PRIMARY KEY,
     resource_id INTEGER REFERENCES knowledge_resources(id) ON DELETE CASCADE,
     index_type VARCHAR(50) NOT NULL,
     content JSONB,
     text_content TEXT,
-    embedding vector(384),  -- For pgvector; remove if not using
+    embedding JSONB,  -- Vector stored as JSON array upgrade to pgvector later if needed
     embedding_model VARCHAR(100),
     chunk_index INTEGER,
     chunk_total INTEGER,
@@ -546,27 +546,33 @@ def create_knowledge_tables(connection, use_postgres: bool = True):
     Execute table creation SQL.
     
     Args:
-        connection: Database connection
+        connection: Database connection (SQLAlchemy connection object)
         use_postgres: True for PostgreSQL, False for SQLite
     """
+    from sqlalchemy import text
+    
     sql = CREATE_TABLES_SQL if use_postgres else CREATE_TABLES_SQLITE
     
     # Split by statement and execute each
     statements = [s.strip() for s in sql.split(';') if s.strip()]
     
-    cursor = connection.cursor()
     for statement in statements:
         try:
-            cursor.execute(statement)
+            connection.execute(text(statement))
         except Exception as e:
-            print(f"Warning: Could not execute: {statement[:50]}... Error: {e}")
+            # Don't print warnings for "already exists" type errors
+            error_str = str(e).lower()
+            if 'already exists' not in error_str and 'duplicate' not in error_str:
+                print(f"Warning: Could not execute: {statement[:50]}... Error: {e}")
     
-    connection.commit()
-    print(f"Knowledge Base tables created ({'PostgreSQL' if use_postgres else 'SQLite'})")
+    # Note: commit is handled by the caller (main.py does conn.commit())
+    print(f"Knowledge Base tables created/verified ({'PostgreSQL' if use_postgres else 'SQLite'})")
 
 
 def drop_knowledge_tables(connection):
     """Drop all knowledge base tables (use carefully!)"""
+    from sqlalchemy import text
+    
     tables = [
         "learning_progress",
         "author_voices", 
@@ -576,12 +582,10 @@ def drop_knowledge_tables(connection):
         "knowledge_collections"
     ]
     
-    cursor = connection.cursor()
     for table in tables:
         try:
-            cursor.execute(f"DROP TABLE IF EXISTS {table} CASCADE")
+            connection.execute(text(f"DROP TABLE IF EXISTS {table} CASCADE"))
         except Exception as e:
             print(f"Warning: Could not drop {table}: {e}")
     
-    connection.commit()
     print("Knowledge Base tables dropped")

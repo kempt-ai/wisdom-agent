@@ -12,6 +12,8 @@ REST endpoints for:
 """
 
 from fastapi import APIRouter, HTTPException, Query, UploadFile, File, Form, Depends
+from pydantic import BaseModel
+from sqlalchemy import text
 from typing import Optional, List
 import logging
 
@@ -947,40 +949,40 @@ async def get_knowledge_stats(
         
         # Count collections
         coll_cursor = service.db.execute(
-            "SELECT COUNT(*) FROM knowledge_collections WHERE user_id = ?",
-            (user_id,)
+            text("SELECT COUNT(*) FROM knowledge_collections WHERE user_id = :user_id"),
+            {"user_id": user_id}
         )
         collection_count = coll_cursor.fetchone()[0]
         
         # Count resources and tokens
         res_cursor = service.db.execute(
-            """SELECT COUNT(*), COALESCE(SUM(token_count), 0), COALESCE(SUM(index_cost_dollars), 0)
-               FROM knowledge_resources WHERE user_id = ?""",
-            (user_id,)
+            text("""SELECT COUNT(*), COALESCE(SUM(token_count), 0), COALESCE(SUM(index_cost_dollars), 0)
+               FROM knowledge_resources WHERE user_id = :user_id"""),
+            {"user_id": user_id}
         )
         res_row = res_cursor.fetchone()
         
         # Count indexes
         idx_cursor = service.db.execute(
-            """SELECT COUNT(*) FROM resource_indexes ri
+            text("""SELECT COUNT(*) FROM resource_indexes ri
                JOIN knowledge_resources r ON r.id = ri.resource_id
-               WHERE r.user_id = ?""",
-            (user_id,)
+               WHERE r.user_id = :user_id"""),
+            {"user_id": user_id}
         )
         index_count = idx_cursor.fetchone()[0]
         
         # Count characters and author voices
         char_cursor = service.db.execute(
-            """SELECT COUNT(*) FROM character_profiles cp
+            text("""SELECT COUNT(*) FROM character_profiles cp
                JOIN knowledge_resources r ON r.id = cp.resource_id
-               WHERE r.user_id = ?""",
-            (user_id,)
+               WHERE r.user_id = :user_id"""),
+            {"user_id": user_id}
         )
         character_count = char_cursor.fetchone()[0]
         
         voice_cursor = service.db.execute(
-            "SELECT COUNT(*) FROM author_voices WHERE user_id = ?",
-            (user_id,)
+            text("SELECT COUNT(*) FROM author_voices WHERE user_id = :user_id"),
+            {"user_id": user_id}
         )
         voice_count = voice_cursor.fetchone()[0]
         

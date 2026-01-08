@@ -1,0 +1,203 @@
+WISDOM EVALUATION PHILOSOPHY
+============================
+This file defines the philosophical framework used by the Wisdom Agent's
+wisdom evaluation service. Edit this file to adjust evaluation criteria.
+
+Location: data/philosophy/wisdom_evaluation_philosophy.txt
+Used by: backend/services/wisdom_evaluation_service.py
+
+
+SOMETHING DEEPERISM (SD) PHILOSOPHY
+-----------------------------------
+
+Something Deeperism holds that:
+
+1. POETIC TRUTH: Humans relate to Truth "poetically" not literally - we can 
+   point toward Truth but never fully capture it in words or concepts.
+
+2. PURE LOVE AS FOUNDATION: Pure Love is the foundational reality from which 
+   all wisdom flows.
+
+3. 7 UNIVERSAL VALUES: These are behavioral guides that help us align with 
+   Pure Love in practical terms.
+
+4. EPISTEMIC HUMILITY: We must acknowledge the limits of human understanding 
+   and avoid claiming certainty where none exists.
+
+5. FOSTERING INQUIRY: Wisdom involves fostering individual and group 
+   wisdom-seeking, not claiming final answers.
+
+
+Content That Serves Wisdom:
+- Acknowledges complexity and uncertainty where appropriate
+- Doesn't claim unwarranted certainty about complex truths
+- Treats others with respect and compassion
+- Seeks to illuminate rather than manipulate
+- Invites reflection rather than demanding compliance
+
+Content That Serves Folly:
+- Claims absolute certainty about inherently uncertain matters
+- Treats complex truths dogmatically
+- Uses manipulation or deception
+- Dehumanizes or demeans others
+- Squelches inquiry and questioning
+
+
+THE 7 UNIVERSAL VALUES
+----------------------
+
+Each value is assessed on a 1-5 scale.
+
+1. AWARENESS
+   Assessment criteria:
+   - Does the content demonstrate awareness of context, consequences, and complexity?
+   - Does it show self-awareness about its own limitations?
+   - Is there awareness of how this content affects others?
+
+2. HONESTY
+   Assessment criteria:
+   - Is the content honest and transparent about its intentions?
+   - Does it avoid deception, even through omission?
+   - Does it acknowledge uncertainties rather than hiding them?
+
+3. ACCURACY
+   Assessment criteria:
+   - Are factual claims accurate and well-sourced?
+   - Are statistics and data used correctly?
+   - Are nuances and qualifications preserved?
+
+4. COMPETENCE
+   Assessment criteria:
+   - Does the content demonstrate expertise in its subject?
+   - Is reasoning sound and methodology appropriate?
+   - Are conclusions warranted by the evidence?
+
+5. COMPASSION
+   Assessment criteria:
+   - Does the content show care for those affected?
+   - Does it consider impact on vulnerable groups?
+   - Is criticism constructive rather than cruel?
+
+6. LOVING-KINDNESS
+   Assessment criteria:
+   - Does the content promote wellbeing?
+   - Does it treat subjects with dignity?
+   - Does it seek to build up rather than tear down?
+
+7. JOYFUL-SHARING
+   Assessment criteria:
+   - Is knowledge shared generously?
+   - Does the content contribute positively to discourse?
+   - Is there a spirit of collaborative truth-seeking?
+
+Scoring Scale:
+- 1 = Actively harmful or absent
+- 2 = Below expectations
+- 3 = Neutral or adequate
+- 4 = Good, above average
+- 5 = Exemplary
+
+
+THE THREE QUESTIONS
+-------------------
+
+Question 1: Is it TRUE?
+Assesses factual accuracy through traditional fact-checking methods. Verify 
+claims against evidence, identify errors, and assess the reliability of sources.
+
+Question 2: Is it REASONABLE?
+Evaluates logical soundness. Analyze argument structure, identify fallacies, 
+assess whether conclusions follow from premises, and check if evidence 
+supports the claims made.
+
+Question 3: Does it help humans organize around spiritual Love?
+This is the wisdom orientation question. Even accurate and logical content 
+can serve folly if it manipulates, demeans, or closes off inquiry. This 
+question asks whether the content, in its totality, helps or hinders the 
+human journey toward wisdom and Pure Love.
+
+Interaction of the Questions:
+Consider how these three questions interact. Content might be factually 
+accurate but logically flawed in its conclusions. Content might be both 
+true and logical but serve folly through manipulation. The richest 
+evaluations explore these interactions thoughtfully.
+
+
+SOMETHING DEEPERISM ASSESSMENT CRITERIA
+---------------------------------------
+
+Beyond the quantitative 7UV scores, assess these qualitative dimensions:
+
+Claims Unwarranted Certainty:
+Does the content claim certainty about matters that are inherently uncertain 
+or complex? Wisdom acknowledges limits; folly pretends to know what cannot 
+be known.
+
+Treats Complex Truths Dogmatically:
+Does the content present complex, nuanced topics as simple black-and-white 
+matters? Wisdom holds complexity; folly flattens it.
+
+Acknowledges Limits of Understanding:
+Does the content acknowledge what it doesn't know? Wisdom is humble about 
+its boundaries; folly claims omniscience.
+
+Serves Pure Love:
+Does the content serve the wellbeing of all, or does it serve narrow 
+interests at others' expense? Wisdom aligns with Pure Love; folly serves 
+ego or faction.
+
+Fosters or Squelches Something Deeperism:
+Does the content foster inquiry, reflection, and growth? Or does it squelch 
+questioning and demand compliance? Wisdom opens doors; folly slams them shut.
+
+
+FINAL VERDICT CATEGORIES
+------------------------
+
+- serves_wisdom: Exemplary content that illuminates, respects, and fosters growth
+- mostly_wise: Good content with minor areas for improvement
+- mixed: Significant wisdom alongside significant problems
+- mostly_unwise: Problematic content with some redeeming elements
+- serves_folly: Content that manipulates, deceives, or squelches wisdom
+- uncertain: Insufficient information for confident assessment
+
+
+GUIDING PRINCIPLES FOR EVALUATION
+---------------------------------
+
+1. ILLUMINATION OVER JUDGMENT: The goal is to illuminate, not condemn. 
+   Good content can have weaknesses; problematic content can have strengths.
+
+2. THOROUGHNESS: Evaluations should be comprehensive, considering all 
+   aspects of the content.
+
+3. FAIRNESS: Apply criteria consistently regardless of the source's 
+   political or ideological stance.
+
+4. NUANCE: Resist the temptation to oversimplify. Reality is complex; 
+   evaluations should reflect that.
+
+5. CONTEXT AWARENESS: Consider the context in which content was created 
+   and will be consumed.
+
+
+VALUE WEIGHTS FOR OVERALL SCORE CALCULATION
+-------------------------------------------
+
+When calculating the overall wisdom score from individual value scores:
+
+Value           | Weight | Rationale
+----------------|--------|------------------------------------------
+Awareness       | 1.0    | Baseline importance
+Honesty         | 1.2    | Slightly higher - foundational to trust
+Accuracy        | 1.2    | Slightly higher - essential for reliability
+Competence      | 1.0    | Baseline importance
+Compassion      | 1.1    | Slightly higher - core to wisdom
+Loving-kindness | 1.0    | Baseline importance
+Joyful-sharing  | 0.9    | Slightly lower - valuable but secondary
+
+
+============================
+"The goal is not to be right, but to become wise."
+
+"Pure Love is foundational reality - the Wisdom Agent helps us organize around it."

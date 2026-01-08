@@ -96,6 +96,117 @@ class ReviewService:
         if self._wisdom_evaluation_service is None:
             self._wisdom_evaluation_service = get_wisdom_evaluation_service()
         return self._wisdom_evaluation_service
+    # ========================================================================
+    # COST ESTIMATION
+    # ========================================================================
+    
+    async def estimate_fact_check_cost(
+        self,
+        source_type: SourceType,
+        source_content: Optional[str] = None,
+        source_url: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Estimate the cost of a fact-check operation before running it.
+        
+        For URLs, fetches the content first to get accurate token count.
+        
+        Returns dict with:
+        - input_tokens: estimated input tokens
+        - estimates_by_model: list of {model, provider, cost, tier}
+        - recommended_model: best value recommendation
+        """
+        from backend.services.llm_router import get_llm_router, PROVIDER_MODELS
+        
+        # Get content length
+        if source_type == SourceType.URL and source_url:
+            # Fetch URL to estimate content size
+            try:
+                service = self._get_content_extraction()
+                client = await service.get_http_client()
+                response = await client.get(source_url)
+                response.raise_for_status()
+                
+                # Quick extraction for size estimate
+                from bs4 import BeautifulSoup
+                soup = BeautifulSoup(response.text, "html.parser")
+                # Remove script/style
+                for tag in soup(["script", "style", "nav", "footer", "header"]):
+                    tag.decompose()
+                text = soup.get_text(separator=" ", strip=True)
+                content = text[:50000]  # Cap for estimation
+            except Exception as e:
+                # If fetch fails, estimate based on typical article
+                content = "x" * 8000  # ~2000 tokens typical article
+        elif source_type == SourceType.TEXT and source_content:
+            content = source_content
+        else:
+            content = "x" * 4000  # Default estimate
+        
+        # Estimate tokens (rough: 4 chars per token)
+        input_tokens = len(content) // 4
+        
+        # Fact-check pipeline uses multiple LLM calls:
+        # 1. Claim extraction: input + ~2000 output
+        # 2. Fact verification: ~500 input per claim × ~10 claims, ~300 output each
+        # 3. Logic analysis: input + ~1500 output  
+        # 4. Wisdom evaluation: input + summaries (~2000) + ~2000 output
+        
+        # Total estimated tokens for full pipeline
+        estimated_claims = min(20, max(3, input_tokens // 500))  # Rough claim count
+        
+        total_input = (
+            input_tokens +                          # Claim extraction
+            (500 * estimated_claims) +              # Fact check per claim
+            input_tokens +                          # Logic analysis
+            (input_tokens + 2000)                   # Wisdom (content + summaries)
+        )
+        total_output = (
+            2000 +                                  # Claim extraction
+            (300 * estimated_claims) +              # Fact check per claim
+            1500 +                                  # Logic analysis
+            2000                                    # Wisdom evaluation
+        )
+        
+        # Calculate costs for each available model
+        estimates = []
+        for provider, provider_data in PROVIDER_MODELS.items():
+            for model in provider_data['models']:
+                input_cost = (total_input / 1_000_000) * model['input_cost_per_1m']
+                output_cost = (total_output / 1_000_000) * model['output_cost_per_1m']
+                total_cost = input_cost + output_cost
+                
+                estimates.append({
+                    'provider': provider,
+                    'model_id': model['id'],
+                    'model_name': model['name'],
+                    'tier': model['tier'],
+                    'estimated_cost': round(total_cost, 4),
+                    'input_cost_per_1m': model['input_cost_per_1m'],
+                    'output_cost_per_1m': model['output_cost_per_1m'],
+                    'description': model['description'],
+                })
+        
+        # Sort by cost
+        estimates.sort(key=lambda x: x['estimated_cost'])
+        
+        # Find recommended model (best value = standard tier, reasonable cost)
+        recommended = None
+        for est in estimates:
+            if est['tier'] == 'standard' and est['provider'] in ['anthropic', 'openai', 'gemini']:
+                recommended = est
+                break
+        if not recommended:
+            recommended = estimates[0] if estimates else None
+        
+        return {
+            'content_tokens': input_tokens,
+            'estimated_total_input': total_input,
+            'estimated_total_output': total_output,
+            'estimated_claims': estimated_claims,
+            'estimates_by_model': estimates,
+            'recommended': recommended,
+        }
     
     # ========================================================================
     # CRUD OPERATIONS (unchanged from Phase 1)
@@ -300,6 +411,7 @@ class ReviewService:
         5. Wisdom evaluation (7 Values + Something Deeperism)
         6. Generate summary
         """
+        print(f"DEBUG: run_analysis called for review {review_id}")  # Add this line
         logger.info(f"Starting analysis for review {review_id}")
         
         try:
@@ -313,14 +425,17 @@ class ReviewService:
             # Step 2: Extract claims
             await self._update_status(review_id, ReviewStatus.ANALYZING_CLAIMS)
             claims = await self._extract_claims(review_id, content)
+            print(f"DEBUG: Claims extracted: {len(claims)}, starting fact check...")
             
             # Step 3: Fact check claims
             await self._update_status(review_id, ReviewStatus.FACT_CHECKING)
             fact_results = await self._fact_check_claims(review_id, claims)
+            print(f"DEBUG: Fact check complete, got {len(fact_results)} results")
             
             # Step 4: Logic analysis
             await self._update_status(review_id, ReviewStatus.LOGIC_ANALYSIS)
             logic_results = await self._analyze_logic(review_id, content)
+            print(f"DEBUG: Logic analysis complete")
             
             # Step 5: Wisdom evaluation
             await self._update_status(review_id, ReviewStatus.WISDOM_EVALUATION)
@@ -329,10 +444,13 @@ class ReviewService:
                 fact_summary=self._summarize_fact_results(fact_results),
                 logic_summary=self._summarize_logic_results(logic_results)
             )
+
+            print(f"DEBUG: Wisdom evaluation complete")
             
             # Step 6: Generate summary and complete
             await self._generate_summary(review_id)
             await self._update_status(review_id, ReviewStatus.COMPLETED)
+            print(f"DEBUG: ALL STEPS COMPLETE for review {review_id}")
             
             logger.info(f"Completed analysis for review {review_id}")
             

@@ -205,31 +205,6 @@ export default function FactCheckerPage() {
       r.source_url?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  // Sort models: recommended first, then by tier (premium > standard > economy > free)
-  const getSortedModels = () => {
-    if (!costEstimate?.estimates_by_model) return [];
-    
-    return [...costEstimate.estimates_by_model].sort((a: any, b: any) => {
-      // Recommended model always first
-      if (a.model_id === costEstimate.recommended?.model_id) return -1;
-      if (b.model_id === costEstimate.recommended?.model_id) return 1;
-      
-      // Then by tier: premium > standard > economy > free
-      const tierOrder: Record<string, number> = { 
-        premium: 0, 
-        standard: 1, 
-        economy: 2, 
-        free: 3 
-      };
-      return (tierOrder[a.tier] ?? 4) - (tierOrder[b.tier] ?? 4);
-    });
-  };
-
-  // Check if a model is a local model that requires Ollama
-  const isLocalModel = (est: any) => {
-    return est.provider === 'local' || est.tier === 'free';
-  };
-
   return (
     <div className="min-h-screen bg-stone-50 dark:bg-stone-950">
       <div className="max-w-5xl mx-auto px-6 py-12">
@@ -241,10 +216,10 @@ export default function FactCheckerPage() {
             </div>
             <div>
               <h1 className="text-3xl font-serif font-semibold text-stone-900 dark:text-stone-100">
-                Fact/Logic/Wisdom Checker
+                Fact Checker
               </h1>
               <p className="text-stone-500 dark:text-stone-400">
-                Three-dimensional analysis: Is it True? Is it Reasonable? Does it serve Wisdom?
+                Analyze claims for facts, logic, and wisdom alignment
               </p>
             </div>
           </div>
@@ -284,7 +259,7 @@ export default function FactCheckerPage() {
         {/* Input Section */}
         <div className="card p-6 mb-8">
           <h2 className="text-lg font-serif font-medium text-stone-900 dark:text-stone-100 mb-4">
-            New Analysis
+            New Fact Check
           </h2>
 
           {/* Type selector */}
@@ -392,7 +367,7 @@ export default function FactCheckerPage() {
         <div className="card p-6">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-lg font-serif font-medium text-stone-900 dark:text-stone-100">
-              Recent Analyses
+              Recent Fact Checks
             </h2>
             <div className="relative">
               <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
@@ -421,7 +396,7 @@ export default function FactCheckerPage() {
             <div className="text-center py-12">
               <CheckCircle className="w-12 h-12 mx-auto mb-4 text-stone-300 dark:text-stone-600" />
               <p className="text-stone-500 dark:text-stone-400">
-                {searchQuery ? 'No matching analyses found' : 'No analyses yet. Start your first analysis above!'}
+                {searchQuery ? 'No matching fact checks found' : 'No fact checks yet. Start your first analysis above!'}
               </p>
             </div>
           ) : (
@@ -506,7 +481,7 @@ export default function FactCheckerPage() {
                   Select Model:
                 </p>
                 <div className="space-y-2 max-h-60 overflow-y-auto">
-                  {getSortedModels().map((est: any) => (
+                  {costEstimate.estimates_by_model?.map((est: any) => (
                     <button
                       key={est.model_id}
                       onClick={() => {
@@ -540,11 +515,6 @@ export default function FactCheckerPage() {
                       </div>
                       <p className="text-xs text-stone-500 mt-1">
                         {est.provider} • {est.description}
-                        {isLocalModel(est) && (
-                          <span className="ml-2 text-orange-500 font-medium">
-                            (Requires Ollama running locally)
-                          </span>
-                        )}
                       </p>
                     </button>
                   ))}
@@ -564,7 +534,7 @@ export default function FactCheckerPage() {
                 disabled={isSubmitting}
                 className="flex-1 px-4 py-2 rounded-lg bg-emerald-600 text-white font-medium hover:bg-emerald-700 disabled:opacity-50"
               >
-                {isSubmitting ? 'Analyzing...' : `Analyze ($${getSortedModels().find((e: any) => e.model_id === selectedModel)?.estimated_cost?.toFixed(4) || '0.00'})`}
+                {isSubmitting ? 'Analyzing...' : `Analyze ($${costEstimate.estimates_by_model?.find((e: any) => e.model_id === selectedModel)?.estimated_cost?.toFixed(4) || '0.00'})`}
               </button>
             </div>
           </div>

@@ -12,11 +12,18 @@ We don't just ask "Is it true?" but also "Does it serve wisdom?"
 Author: Wisdom Agent Team
 Date: 2025-12-20
 Phase: 2, Day 10
+
+Modified: 2026-01-03
+- Added external philosophy file loading from data/philosophy/wisdom_evaluation_philosophy.txt
+- Philosophy can now be edited without touching code
+- Added reload_philosophy() function for future UI editing support
 """
 
 import json
 import logging
+import os
 import re
+from pathlib import Path
 from typing import Optional, Dict, Any
 
 from backend.database.connection import get_db_session
@@ -28,10 +35,53 @@ logger = logging.getLogger(__name__)
 
 
 # ============================================================================
-# PHILOSOPHY CONTEXT
+# PHILOSOPHY FILE LOADING
 # ============================================================================
 
-SOMETHING_DEEPERISM_CONTEXT = """
+# Cache for loaded philosophy content
+_PHILOSOPHY_CONTENT: Optional[str] = None
+
+
+def load_philosophy_content() -> str:
+    """
+    Load philosophy content from the external text file.
+    
+    This allows the philosophy to be edited without touching Python code.
+    Falls back to embedded defaults if the file is not found.
+    
+    File location: data/philosophy/wisdom_evaluation_philosophy.txt
+    """
+    # Try multiple possible locations
+    possible_paths = [
+        # From backend/services/ go up two levels to project root, then into data/
+        Path(__file__).parent.parent.parent / "data" / "philosophy" / "wisdom_evaluation_philosophy.txt",
+        # Direct path from project root
+        Path("data/philosophy/wisdom_evaluation_philosophy.txt"),
+        # Docker container path
+        Path("/app/data/philosophy/wisdom_evaluation_philosophy.txt"),
+    ]
+    
+    for path in possible_paths:
+        if path.exists():
+            try:
+                content = path.read_text(encoding='utf-8')
+                logger.info(f"Loaded philosophy from: {path}")
+                return content
+            except Exception as e:
+                logger.warning(f"Could not read {path}: {e}")
+    
+    logger.warning("Philosophy file not found, using embedded defaults")
+    return _get_default_philosophy()
+
+
+def _get_default_philosophy() -> str:
+    """
+    Embedded fallback if external file not found.
+    
+    This ensures the service works even without the external file,
+    but you should use the external file for customization.
+    """
+    return """
 SOMETHING DEEPERISM (SD) PHILOSOPHY:
 
 Something Deeperism holds that:
@@ -54,64 +104,64 @@ Content that serves folly:
 - Uses manipulation or deception
 - Dehumanizes or demeans others
 - Squelches inquiry and questioning
-"""
 
-SEVEN_VALUES_CONTEXT = """
-THE 7 UNIVERSAL VALUES:
+THE 7 UNIVERSAL VALUES (1-5 scale):
 
-1. AWARENESS (1-5 scale)
-   - Does the content demonstrate awareness of context, consequences, and complexity?
-   - Does it show self-awareness about its own limitations?
-   - Is there awareness of how this content affects others?
+1. AWARENESS - context and self-awareness
+2. HONESTY - transparency and truthfulness  
+3. ACCURACY - factual correctness
+4. COMPETENCE - expertise and sound reasoning
+5. COMPASSION - care for those affected
+6. LOVING-KINDNESS - dignity and wellbeing
+7. JOYFUL-SHARING - generous knowledge sharing
 
-2. HONESTY (1-5 scale)
-   - Is the content honest and transparent about its intentions?
-   - Does it avoid deception, even through omission?
-   - Does it acknowledge uncertainties rather than hiding them?
-
-3. ACCURACY (1-5 scale)
-   - Are factual claims accurate and well-sourced?
-   - Are statistics and data used correctly?
-   - Are nuances and qualifications preserved?
-
-4. COMPETENCE (1-5 scale)
-   - Does the content demonstrate expertise in its subject?
-   - Is reasoning sound and methodology appropriate?
-   - Are conclusions warranted by the evidence?
-
-5. COMPASSION (1-5 scale)
-   - Does the content show care for those affected?
-   - Does it consider impact on vulnerable groups?
-   - Is criticism constructive rather than cruel?
-
-6. LOVING-KINDNESS (1-5 scale)
-   - Does the content promote wellbeing?
-   - Does it treat subjects with dignity?
-   - Does it seek to build up rather than tear down?
-
-7. JOYFUL-SHARING (1-5 scale)
-   - Is knowledge shared generously?
-   - Does the content contribute positively to discourse?
-   - Is there a spirit of collaborative truth-seeking?
-
-Score each value 1-5:
-1 = Actively harmful/absent
-2 = Below expectations
-3 = Neutral/adequate
-4 = Good/above average
-5 = Exemplary
+THE THREE QUESTIONS:
+1. Is it TRUE? (factual accuracy)
+2. Is it REASONABLE? (logical soundness)
+3. Does it serve WISDOM? (alignment with Pure Love)
 """
 
 
+def get_philosophy_content() -> str:
+    """Get cached philosophy content, loading if necessary."""
+    global _PHILOSOPHY_CONTENT
+    if _PHILOSOPHY_CONTENT is None:
+        _PHILOSOPHY_CONTENT = load_philosophy_content()
+    return _PHILOSOPHY_CONTENT
+
+
+def reload_philosophy() -> str:
+    """
+    Force reload of philosophy content from file.
+    
+    Call this if the file has been edited and you want to pick up changes
+    without restarting the service. Useful for future UI editing feature.
+    
+    Returns:
+        The newly loaded philosophy content
+    """
+    global _PHILOSOPHY_CONTENT
+    _PHILOSOPHY_CONTENT = None
+    content = get_philosophy_content()
+    logger.info(f"Philosophy reloaded ({len(content)} characters)")
+    return content
+
+
 # ============================================================================
-# PROMPTS
+# SYSTEM PROMPT GENERATION
 # ============================================================================
 
-WISDOM_EVALUATION_SYSTEM_PROMPT = f"""You are a philosophical evaluator using the Wisdom Agent framework.
+def get_wisdom_evaluation_system_prompt() -> str:
+    """
+    Generate the system prompt using loaded philosophy content.
+    
+    This is called fresh each time to allow for hot-reloading of philosophy.
+    """
+    philosophy = get_philosophy_content()
+    
+    return f"""You are a philosophical evaluator using the Wisdom Agent framework.
 
-{SOMETHING_DEEPERISM_CONTEXT}
-
-{SEVEN_VALUES_CONTEXT}
+{philosophy}
 
 Your task is to evaluate content against this framework, assessing both:
 1. The 7 Universal Values (quantitative scores with qualitative notes)
@@ -127,6 +177,11 @@ The Three Questions:
 Consider how these three questions interact in each case.
 
 Respond in JSON format only."""
+
+
+# ============================================================================
+# USER PROMPT (kept as constant - structure shouldn't change)
+# ============================================================================
 
 WISDOM_EVALUATION_USER_PROMPT = """Evaluate this content using the Wisdom Agent philosophical framework:
 
@@ -238,13 +293,14 @@ class WisdomEvaluationService:
             # Perform LLM evaluation
             llm = self.get_llm_service()
             
+            # Use dynamic system prompt (reads from external file)
             response = llm.complete(
                 messages=[{"role": "user", "content": WISDOM_EVALUATION_USER_PROMPT.format(
                     content=self._truncate_content(content),
                     fact_check_summary=fact_context,
                     logic_summary=logic_context
                 )}],
-                system_prompt=WISDOM_EVALUATION_SYSTEM_PROMPT,
+                system_prompt=get_wisdom_evaluation_system_prompt(),  # <-- CHANGED: Now uses function
                 temperature=0.4,  # Slightly higher for more nuanced evaluation
             )
             
@@ -500,6 +556,24 @@ class WisdomEvaluationService:
         except Exception as e:
             logger.warning(f"Quick wisdom check failed: {e}")
             return {"error": str(e)}
+    
+    def get_philosophy_path(self) -> Optional[str]:
+        """
+        Get the path to the loaded philosophy file.
+        
+        Returns None if using embedded defaults.
+        Useful for the UI to show where the philosophy is coming from.
+        """
+        possible_paths = [
+            Path(__file__).parent.parent.parent / "data" / "philosophy" / "wisdom_evaluation_philosophy.txt",
+            Path("data/philosophy/wisdom_evaluation_philosophy.txt"),
+            Path("/app/data/philosophy/wisdom_evaluation_philosophy.txt"),
+        ]
+        
+        for path in possible_paths:
+            if path.exists():
+                return str(path)
+        return None
 
 
 # ============================================================================

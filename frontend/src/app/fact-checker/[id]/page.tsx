@@ -31,6 +31,11 @@ const verdictConfig: Record<string, { color: string; bg: string; icon: any }> = 
   mostly_unwise: { color: 'text-orange-700', bg: 'bg-orange-100', icon: AlertCircle },
   serves_folly: { color: 'text-red-700', bg: 'bg-red-100', icon: XCircle },
   uncertain: { color: 'text-slate-600', bg: 'bg-slate-100', icon: HelpCircle },
+  // Logic verdicts (derived from score)
+  sound: { color: 'text-green-700', bg: 'bg-green-100', icon: CheckCircle },
+  mostly_sound: { color: 'text-green-600', bg: 'bg-green-50', icon: CheckCircle },
+  some_issues: { color: 'text-yellow-700', bg: 'bg-yellow-100', icon: HelpCircle },
+  problematic: { color: 'text-orange-700', bg: 'bg-orange-100', icon: AlertCircle },
 };
 
 // Status config
@@ -44,6 +49,34 @@ const statusConfig: Record<string, { color: string; label: string }> = {
   completed: { color: 'text-green-600', label: 'Completed' },
   failed: { color: 'text-red-600', label: 'Failed' },
 };
+
+// Helper to derive logic verdict from score
+function getLogicVerdict(logicAnalysis: any): string {
+  if (!logicAnalysis?.logic_quality_score) return 'uncertain';
+  const score = logicAnalysis.logic_quality_score;
+  if (score >= 0.85) return 'sound';
+  if (score >= 0.7) return 'mostly_sound';
+  if (score >= 0.5) return 'some_issues';
+  return 'problematic';
+}
+
+// Helper to extract values assessment from wisdom evaluation
+function getValuesAssessment(wisdomEval: any): Record<string, { score: number; notes?: string }> | null {
+  if (!wisdomEval) return null;
+  
+  const valueKeys = ['awareness', 'honesty', 'accuracy', 'competence', 'compassion', 'loving_kindness', 'joyful_sharing'];
+  const assessment: Record<string, { score: number; notes?: string }> = {};
+  
+  let hasValues = false;
+  for (const key of valueKeys) {
+    if (wisdomEval[key] && typeof wisdomEval[key].score === 'number') {
+      assessment[key] = wisdomEval[key];
+      hasValues = true;
+    }
+  }
+  
+  return hasValues ? assessment : null;
+}
 
 export default function FactCheckResultPage() {
   const params = useParams();
@@ -107,6 +140,12 @@ export default function FactCheckResultPage() {
   const status = statusConfig[review.status] || statusConfig.pending;
   const isProcessing = !['completed', 'failed'].includes(review.status);
 
+  // Derive values for display from actual API field names
+  const factualVerdict = (review as any).overall_factual_verdict || (review as any).factual_verdict;
+  const wisdomVerdict = (review as any).overall_wisdom_verdict || (review as any).wisdom_verdict;
+  const logicVerdict = getLogicVerdict((review as any).logic_analysis);
+  const valuesAssessment = getValuesAssessment((review as any).wisdom_evaluation);
+
   return (
     <div className="min-h-screen bg-slate-50">
       {/* Header */}
@@ -159,17 +198,17 @@ export default function FactCheckResultPage() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
             <VerdictCard
               title="Factual Accuracy"
-              verdict={review.factual_verdict}
+              verdict={factualVerdict}
               icon={FileText}
             />
             <VerdictCard
               title="Logical Soundness"
-              verdict={review.logic_verdict}
+              verdict={logicVerdict}
               icon={Brain}
             />
             <VerdictCard
               title="Wisdom Alignment"
-              verdict={review.wisdom_verdict}
+              verdict={wisdomVerdict}
               icon={Heart}
             />
           </div>
@@ -203,26 +242,41 @@ export default function FactCheckResultPage() {
               Logic Analysis
             </h2>
             <div className="bg-white rounded-lg border border-slate-200 p-6">
-              {review.logic_analysis.argument_structure && (
+              {/* Main conclusion (was argument_structure) */}
+              {((review.logic_analysis as any).main_conclusion || (review.logic_analysis as any).argument_structure) && (
                 <div className="mb-4">
-                  <h3 className="text-sm font-medium text-slate-700 mb-2">Argument Structure</h3>
-                  <p className="text-slate-600">{review.logic_analysis.argument_structure}</p>
+                  <h3 className="text-sm font-medium text-slate-700 mb-2">Main Conclusion</h3>
+                  <p className="text-slate-600">
+                    {(review.logic_analysis as any).main_conclusion || (review.logic_analysis as any).argument_structure}
+                  </p>
                 </div>
               )}
-              {review.logic_analysis.fallacies_detected && review.logic_analysis.fallacies_detected.length > 0 && (
+              {/* Fallacies (handle both old and new format) */}
+              {((review.logic_analysis as any).fallacies_found?.length > 0 || (review.logic_analysis as any).fallacies_detected?.length > 0) && (
                 <div className="mb-4">
                   <h3 className="text-sm font-medium text-slate-700 mb-2">Fallacies Detected</h3>
                   <ul className="list-disc list-inside text-slate-600 space-y-1">
-                    {review.logic_analysis.fallacies_detected.map((fallacy, i) => (
-                      <li key={i}>{fallacy}</li>
+                    {((review.logic_analysis as any).fallacies_found || (review.logic_analysis as any).fallacies_detected || []).map((fallacy: any, i: number) => (
+                      <li key={i}>
+                        {typeof fallacy === 'string' ? fallacy : (
+                          <>
+                            <strong>{fallacy.name}</strong>
+                            {fallacy.description && `: ${fallacy.description}`}
+                            {fallacy.quote && <span className="text-slate-400 italic ml-2">"{fallacy.quote}"</span>}
+                          </>
+                        )}
+                      </li>
                     ))}
                   </ul>
                 </div>
               )}
-              {review.logic_analysis.overall_soundness && (
+              {/* Soundness assessment (was overall_soundness) */}
+              {((review.logic_analysis as any).soundness_assessment || (review.logic_analysis as any).overall_soundness) && (
                 <div>
                   <h3 className="text-sm font-medium text-slate-700 mb-2">Overall Assessment</h3>
-                  <p className="text-slate-600">{review.logic_analysis.overall_soundness}</p>
+                  <p className="text-slate-600">
+                    {(review.logic_analysis as any).soundness_assessment || (review.logic_analysis as any).overall_soundness}
+                  </p>
                 </div>
               )}
             </div>
@@ -237,13 +291,14 @@ export default function FactCheckResultPage() {
               Wisdom Evaluation
             </h2>
             <div className="bg-white rounded-lg border border-slate-200 p-6">
-              {review.wisdom_evaluation.values_assessment && (
+              {/* Values assessment - handle both formats */}
+              {(valuesAssessment || (review.wisdom_evaluation as any).values_assessment) && (
                 <div className="mb-6">
                   <h3 className="text-sm font-medium text-slate-700 mb-3">7 Universal Values</h3>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {Object.entries(review.wisdom_evaluation.values_assessment).map(([value, assessment]) => (
+                    {Object.entries(valuesAssessment || (review.wisdom_evaluation as any).values_assessment).map(([value, assessment]: [string, any]) => (
                       <div key={value} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
-                        <span className="text-slate-700 capitalize">{value.replace('_', ' ')}</span>
+                        <span className="text-slate-700 capitalize">{value.replace(/_/g, ' ')}</span>
                         <div className="flex items-center gap-2">
                           <div className="w-24 h-2 bg-slate-200 rounded-full overflow-hidden">
                             <div 
@@ -258,16 +313,22 @@ export default function FactCheckResultPage() {
                   </div>
                 </div>
               )}
-              {review.wisdom_evaluation.something_deeperism_alignment && (
+              {/* Something Deeperism assessment (handle both field names) */}
+              {((review.wisdom_evaluation as any).something_deeperism_assessment || (review.wisdom_evaluation as any).something_deeperism_alignment) && (
                 <div className="mb-4">
                   <h3 className="text-sm font-medium text-slate-700 mb-2">Something Deeperism Alignment</h3>
-                  <p className="text-slate-600">{review.wisdom_evaluation.something_deeperism_alignment}</p>
+                  <p className="text-slate-600">
+                    {(review.wisdom_evaluation as any).something_deeperism_assessment || (review.wisdom_evaluation as any).something_deeperism_alignment}
+                  </p>
                 </div>
               )}
-              {review.wisdom_evaluation.overall_alignment && (
+              {/* Final reflection / overall alignment (handle both field names) */}
+              {((review.wisdom_evaluation as any).final_reflection || (review.wisdom_evaluation as any).overall_alignment) && (
                 <div>
                   <h3 className="text-sm font-medium text-slate-700 mb-2">Overall Wisdom Assessment</h3>
-                  <p className="text-slate-600">{review.wisdom_evaluation.overall_alignment}</p>
+                  <p className="text-slate-600">
+                    {(review.wisdom_evaluation as any).final_reflection || (review.wisdom_evaluation as any).overall_alignment}
+                  </p>
                 </div>
               )}
             </div>
@@ -345,7 +406,13 @@ function ClaimCard({
   expanded: boolean;
   onToggle: () => void;
 }) {
-  const config = verdictConfig[claim.verdict?.toLowerCase()] || verdictConfig.unverifiable;
+  // Handle both old format (claim.verdict) and new format (claim.fact_check_result.verdict)
+  const verdict = claim.fact_check_result?.verdict || claim.verdict;
+  const confidence = claim.fact_check_result?.confidence || claim.confidence;
+  const explanation = claim.fact_check_result?.explanation || claim.explanation;
+  const sources = claim.fact_check_result?.web_sources || claim.sources || [];
+  
+  const config = verdictConfig[verdict?.toLowerCase()] || verdictConfig.unverifiable;
   const VerdictIcon = config.icon;
 
   return (
@@ -361,11 +428,11 @@ function ClaimCard({
           <p className="text-slate-900">{claim.claim_text}</p>
           <div className="flex items-center gap-3 mt-2">
             <span className={`text-xs font-medium ${config.color} capitalize`}>
-              {claim.verdict?.replace(/_/g, ' ') || 'Unverified'}
+              {verdict?.replace(/_/g, ' ') || 'Unverified'}
             </span>
-            {claim.confidence !== undefined && (
+            {confidence !== undefined && (
               <span className="text-xs text-slate-400">
-                {Math.round(claim.confidence * 100)}% confidence
+                {Math.round(confidence * 100)}% confidence
               </span>
             )}
           </div>
@@ -377,31 +444,35 @@ function ClaimCard({
         )}
       </button>
       
-      {expanded && claim.explanation && (
+      {expanded && explanation && (
         <div className="px-4 pb-4 pt-0">
           <div className="ml-10 pl-4 border-l-2 border-slate-200">
-            <p className="text-sm text-slate-600">{claim.explanation}</p>
-            {claim.sources && claim.sources.length > 0 && (
+            <p className="text-sm text-slate-600">{explanation}</p>
+            {sources && sources.length > 0 && (
               <div className="mt-3">
                 <p className="text-xs font-medium text-slate-500 mb-1">Sources:</p>
                 <ul className="text-xs text-slate-500 space-y-1">
-                  {claim.sources.map((source: string, i: number) => (
-                    <li key={i}>
-                      {source.startsWith('http') ? (
-                        <a 
-                          href={source} 
-                          target="_blank" 
-                          rel="noopener noreferrer"
-                          className="text-indigo-600 hover:underline flex items-center gap-1"
-                        >
-                          {new URL(source).hostname}
-                          <ExternalLink className="w-3 h-3" />
-                        </a>
-                      ) : (
-                        source
-                      )}
-                    </li>
-                  ))}
+                  {sources.map((source: any, i: number) => {
+                    const url = typeof source === 'string' ? source : source.url;
+                    const title = typeof source === 'string' ? null : source.title;
+                    return (
+                      <li key={i}>
+                        {url?.startsWith('http') ? (
+                          <a 
+                            href={url} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="text-indigo-600 hover:underline flex items-center gap-1"
+                          >
+                            {title || new URL(url).hostname}
+                            <ExternalLink className="w-3 h-3" />
+                          </a>
+                        ) : (
+                          title || url || source
+                        )}
+                      </li>
+                    );
+                  })}
                 </ul>
               </div>
             )}

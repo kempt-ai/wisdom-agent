@@ -75,7 +75,7 @@ async def lifespan(app: FastAPI):
         # Get a raw connection for table creation
         with engine.connect() as conn:
             # Check if using PostgreSQL
-            use_postgres = 'postgresql' in str(engine.url)
+            use_postgres = 'postgres' in str(engine.url).lower()
             create_knowledge_tables(conn, use_postgres=use_postgres)
             conn.commit()
         print("✓ Knowledge Base tables verified/created")
@@ -124,7 +124,7 @@ async def lifespan(app: FastAPI):
                 philosophy_text = philosophy_loader.get_combined_philosophy()
             except AttributeError:
                 # Fallback for older API
-                philosophy_text = philosophy_loader.load_base_philosophy()
+                philosophy_text = philosophy_loader.load_base()
             
             reflection_service = initialize_reflection_service(
                 llm_router=llm_router,
@@ -407,7 +407,7 @@ except ImportError as e:
 # Knowledge Base router
 try:
     from backend.routers.knowledge import router as knowledge_router
-    app.include_router(knowledge_router, tags=["Knowledge Base"])
+    app.include_router(knowledge_router, prefix="/api", tags=["Knowledge Base"])
     print("✓ Knowledge Base router registered")
 except ImportError as e:
     print(f"⚠ Knowledge Base router not available: {e}")

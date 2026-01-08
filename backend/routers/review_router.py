@@ -86,6 +86,28 @@ async def create_review(
         logger.exception(f"Error creating review: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@router.post("/estimate")
+async def estimate_fact_check_cost(
+    request: ReviewCreateRequest,
+    service: ReviewService = Depends(get_review_service)
+):
+    """
+    Estimate the cost of a fact-check before running it.
+    
+    For URLs, this will fetch the page to estimate content size.
+    Returns cost estimates for all available models.
+    """
+    try:
+        estimate = await service.estimate_fact_check_cost(
+            source_type=request.source_type,
+            source_content=request.source_content,
+            source_url=request.source_url,
+        )
+        return estimate
+        
+    except Exception as e:
+        logger.exception(f"Error estimating cost: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("", response_model=ReviewListResponse)
 async def list_reviews(

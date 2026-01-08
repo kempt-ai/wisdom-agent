@@ -1,491 +1,242 @@
 # Wisdom Agent
 
-An open-source AI system designed to help individuals grow in wisdom and enable groups to choose wisdom over folly.
+An open-source AI platform that helps individuals grow in wisdom through philosophical grounding in "Something Deeperism" and the 7 Universal Values.
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
-[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
-[![Next.js 14](https://img.shields.io/badge/Next.js-14-black.svg)](https://nextjs.org/)
+## 🌟 Features
 
----
+### Chat & Wisdom Sessions
+- AI conversations grounded in wisdom philosophy
+- Session memory and context across conversations
+- Automatic reflection generation after sessions
+- Project-based organization
 
-## Table of Contents
+### Fact/Logic/Wisdom Checker (Three-Dimensional Analysis)
+Analyze any content across three dimensions:
+1. **Is it True?** (Factual Accuracy) - Verifies claims against trusted sources and fact-checking databases
+2. **Is it Reasonable?** (Logical Soundness) - Analyzes argument structure and detects fallacies
+3. **Does it Serve Wisdom?** (Wisdom Alignment) - Evaluates alignment with the 7 Universal Values
 
-- [Overview](#overview)
-- [Philosophy](#philosophy)
-- [Features](#features)
-- [Quick Start](#quick-start)
-- [Installation](#installation)
-- [Configuration](#configuration)
-- [Usage](#usage)
-- [API Reference](#api-reference)
-- [Architecture](#architecture)
-- [Contributing](#contributing)
-- [Roadmap](#roadmap)
-- [License](#license)
+**Features:**
+- URL or text input
+- Cost estimation before analysis
+- Model selection (choose from 20+ models across providers)
+- Claim extraction and individual verification
+- Comprehensive results with confidence scores
+- Detailed explanations for each verdict
 
----
+### Knowledge Base
+- Organize resources into collections
+- Index web content and documents
+- Searchable knowledge repository
+- Cost estimation for indexing operations
 
-## Overview
+### Philosophy Framework
+Built on "Something Deeperism" philosophy with the 7 Universal Values:
+- **Awareness** - Being present and attentive
+- **Honesty** - Truthfulness with self and others
+- **Accuracy** - Precision in thought and expression
+- **Competence** - Skillful action and understanding
+- **Compassion** - Care for the suffering of others
+- **Loving-kindness** - Active goodwill toward all
+- **Joyful-sharing** - Generous spirit in community
 
-The Wisdom Agent (WA) is an AI-powered platform that goes beyond typical chatbots and fact-checkers. It's grounded in **Something Deeperism** philosophy, which provides ethical guardrails and a framework for evaluating not just whether something is *true*, but whether it *serves wisdom*.
+### Multi-LLM Support
+Supports multiple AI providers with transparent pricing:
 
-### What Makes It Different?
+| Provider | Models | Use Case |
+|----------|--------|----------|
+| **Anthropic** | Claude 3.5 Sonnet, Claude 3 Haiku, Claude 3 Opus | Best for nuanced reasoning |
+| **OpenAI** | GPT-4o, GPT-4o Mini, GPT-4 Turbo | Versatile, fast |
+| **Google** | Gemini 2.0 Flash, Gemini 1.5 Pro | Cost-effective, large context |
+| **Nebius** | Llama 3.3 70B, DeepSeek V3, Mixtral | Budget-friendly |
+| **Local** | Ollama (Mistral, Llama, Phi-3) | Free, private |
 
-| Traditional AI | Wisdom Agent |
-|----------------|--------------|
-| "Is this factually correct?" | "Is this true, reasonable, AND does it serve wisdom?" |
-| Neutral information delivery | Grounded in Universal Values |
-| No spending awareness | Full cost tracking and budgets |
-| Generic responses | Philosophy-aware, context-rich conversations |
-| Single fact-check verdict | Three-dimensional analysis (facts + logic + wisdom) |
+### Budget Management
+- Monthly spending limits
+- Cost estimation before operations
+- Usage tracking and history
 
----
-
-## Philosophy
-
-### Something Deeperism
-
-The Wisdom Agent is built on Something Deeperism, which holds that:
-
-1. **There is something deeper** — call it Pure Love, God, the Good, or the Transcendent
-2. **We can't capture it literally** — words and concepts point toward but don't contain it
-3. **We can relate to it poetically** — through metaphor, story, and lived practice
-4. **The 7 Universal Values guide behavior** — practical ethics flowing from this foundation
-5. **Wisdom organizes around Pure Love** — both individually and collectively
-
-### The 7 Universal Values
-
-These values guide all Wisdom Agent operations:
-
-| Value | Description |
-|-------|-------------|
-| **Awareness** | Noticing what is actually happening, within and without |
-| **Honesty** | Truthfulness with self and others |
-| **Accuracy** | Getting the facts right, checking sources |
-| **Competence** | Skill and effectiveness in what matters |
-| **Compassion** | Feeling with others in their suffering |
-| **Loving-kindness** | Active goodwill toward all beings |
-| **Joyful-sharing** | Delight in giving wisdom forward |
-
-### The Three Questions
-
-Every analysis in the Wisdom Agent asks:
-
-1. **Is it True?** — Factual accuracy (traditional fact-checking)
-2. **Is it Reasonable?** — Logical soundness (argument analysis)
-3. **Does it serve Wisdom?** — Alignment with Universal Values
-
----
-
-## Features
-
-### ✅ Working Now
-
-#### 💬 Wisdom Chat
-Conversational AI grounded in philosophical principles.
-
-- Multi-provider support (Claude, GPT-4, Nebius/Llama, local models via Ollama)
-- Session-based memory with continuity across conversations
-- 7 Universal Values reflection after each session
-- Philosophy overlay system for domain-specific guidance
-- Real-time model switching in Settings
-
-#### ✅ Fact & Logic & Wisdom Checker
-**The core differentiator** — comprehensive content analysis that asks "Does it serve wisdom?"
-
-- **Multi-source input**: URLs, pasted text (file upload coming soon)
-- **Claim extraction**: AI identifies check-worthy claims automatically
-- **Multi-provider verification**: 
-  - ClaimBuster for existing fact-checks
-  - LLM verification with reasoning for novel claims
-  - Google Fact Check API (requires API key)
-- **Logic analysis**: 
-  - Fallacy detection (ad hominem, false cause, hasty generalization, etc.)
-  - Argument structure mapping
-  - Validity and soundness assessment
-- **Wisdom evaluation**: 
-  - 7UV scoring for every piece of content
-  - Something Deeperism alignment assessment
-  - "Serves wisdom or folly" verdict
-- **Repository**: Browse past fact-checks
-
-#### 📊 Spending Tracker
-Track AI costs with visual budget monitoring.
-
-- Real-time spending display in sidebar
-- Configurable monthly limits (default $20)
-- Per-operation cost tracking
-- Visual progress bar
-
-#### 📁 Projects
-Organize work into focused contexts.
-
-- Create and manage projects
-- Project-specific sessions
-- Archive completed projects
-
-#### ✨ Reflections
-Review your wisdom journey.
-
-- Session summaries with key insights
-- 7UV score visualizations
-- Browse past sessions
-
-### 🚧 Coming Soon
-
-#### 📚 Knowledge Base
-Personal knowledge management with AI-powered indexing. (Backend designed, frontend in progress)
-
-- Collections for organizing resources
-- URL content extraction with trafilatura
-- Multiple indexing levels with cost estimates
-- Semantic search across all knowledge
-
-#### 💰 Cost Disclosure Before Operations
-Show users exactly what each operation will cost before they confirm.
-
-- Token estimates for fact-checks
-- Model comparison with pricing
-- "Use cheaper model" options
-
----
-
-## Quick Start
+## 🚀 Quick Start
 
 ### Prerequisites
+- Python 3.10+
+- Node.js 18+
+- PostgreSQL (recommended) or SQLite (fallback)
+- Docker (optional, for PostgreSQL)
 
-- **Python 3.11+**
-- **Node.js 18+**
-- **Docker** (for PostgreSQL) OR use SQLite fallback
-- At least one LLM API key (Anthropic recommended)
-
-### 1. Clone and Setup
+### Option 1: With Docker (Recommended)
 
 ```bash
+# Clone the repository
 git clone https://github.com/kempt-ai/wisdom-agent.git
 cd wisdom-agent
-```
 
-### 2. Configure Environment
-
-```bash
-# Copy environment template
-cp backend/.env.example backend/.env
-
-# Edit with your API keys
-nano backend/.env
-```
-
-Required in `.env`:
-```env
-# At least one LLM provider (Anthropic recommended)
-ANTHROPIC_API_KEY=your_key_here
-
-# Optional additional providers
-OPENAI_API_KEY=your_key_here
-NEBIUS_API_KEY=your_key_here
-
-# Optional fact-check providers
-CLAIMBUSTER_API_KEY=your_key_here
-GOOGLE_FACT_CHECK_API_KEY=your_key_here
-```
-
-### 3. Start the Application
-
-**Option A: With Docker (PostgreSQL)**
-
-```bash
-# Terminal 1 — Database
+# Start PostgreSQL with Docker
 docker-compose up -d
 
-# Terminal 2 — Backend (from project root)
-uvicorn backend.main:app --reload
+# Set up Python environment
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+pip install -r requirements.txt
 
-# Terminal 3 — Frontend
-cd frontend
-npm install  # First time only
-npm run dev
+# Set up environment variables
+cp .env.example .env
+# Edit .env with your API keys
+
+# Start the backend
+uvicorn backend.main:app --reload
 ```
 
-**Option B: Without Docker (SQLite fallback)**
-
-Comment out `DATABASE_URL` in your `.env` file, then:
+### Option 2: Without Docker (SQLite)
 
 ```bash
-# Terminal 1 — Backend
-uvicorn backend.main:app --reload
+# Clone and set up as above, but skip docker-compose
+# The app will automatically use SQLite if no DATABASE_URL is set
+```
 
-# Terminal 2 — Frontend
+### Frontend Setup
+```bash
 cd frontend
 npm install
 npm run dev
 ```
 
-### 4. Open the App
+Visit `http://localhost:3000` to access the application.
 
-- **App**: http://localhost:3000
-- **API Docs**: http://localhost:8000/docs
+## 🔧 Configuration
 
----
+### Environment Variables
+Create a `.env` file in the root directory:
 
-## Usage
+```bash
+# Required: At least one LLM provider
+ANTHROPIC_API_KEY=your_key_here      # Recommended
+OPENAI_API_KEY=your_key_here         # Optional
+GOOGLE_API_KEY=your_key_here         # Optional
+NEBIUS_API_KEY=your_key_here         # Optional (budget-friendly)
 
-### Checking Facts, Logic, and Wisdom
+# Database (optional - defaults to SQLite if not set)
+DATABASE_URL=postgresql://postgres:password@localhost:5432/wisdom_agent
 
-1. Click **Fact Checker** in the sidebar
-2. Choose input type: **Text/Claim** or **URL/Article**
-3. Paste your content
-4. Click **Analyze for Facts, Logic & Wisdom**
-5. Wait 30-60 seconds for full analysis
-6. Review results:
-   - **Extracted claims** with individual verdicts
-   - **Logic analysis** with fallacy detection
-   - **Wisdom evaluation** with 7UV scores
+# Fact-checking providers (optional - enhances fact-checking)
+CLAIMBUSTER_API_KEY=your_key_here
+# Google Fact Check API uses GOOGLE_API_KEY
+```
 
-### Example: Analyzing Misinformation
+### Database Options
+- **PostgreSQL** (recommended): Better performance, required for production
+- **SQLite** (default): No setup required, great for development and testing
 
-Input:
-> "Vaccines cause autism in children. The moon landing was faked. Climate change is a hoax invented by scientists."
-
-Output:
-- ❌ **Vaccines cause autism**: FALSE (95% confidence) — "Multiple high-quality studies spanning decades have found no causal link..."
-- ❌ **Moon landing was faked**: FALSE (90% confidence) — "The scientific and historical evidence overwhelmingly supports the authenticity..."
-- ❌ **Climate change is a hoax**: FALSE (95% confidence) — "The overwhelming scientific consensus among researchers..."
-- 🧠 **Logic Score**: 0.10/1.0 — 5 fallacies detected (Appeal to False Authority, False Cause, etc.)
-- 💫 **Wisdom Score**: 0.10/1.0 — "Serves Folly"
-
-### Having a Wisdom Conversation
-
-1. Click **Chat** in the sidebar
-2. Start a conversation with the AI
-3. When finished, click **End Session**
-4. Review your 7 Universal Values reflection
-5. View past sessions in **Wisdom Sessions**
-
-### Managing Your Budget
-
-1. View spending in the sidebar widget (bottom left)
-2. Go to **Settings** to:
-   - See current AI provider
-   - Switch between providers
-   - View available models
-
----
-
-## API Reference
-
-### Core Endpoints
-
-| Category | Method | Endpoint | Description |
-|----------|--------|----------|-------------|
-| **Health** | GET | `/health` | Service status |
-| **Chat** | POST | `/api/chat/complete` | Send message |
-| **Chat** | POST | `/api/chat/ask` | Philosophy-grounded question |
-| **Chat** | GET | `/api/chat/providers` | List available providers |
-| **Sessions** | POST | `/api/sessions/start` | Create session |
-| **Sessions** | POST | `/api/sessions/{id}/end` | End with reflection |
-| **Projects** | GET | `/api/projects` | List projects |
-| **Projects** | POST | `/api/projects` | Create project |
-
-### Fact Checker Endpoints
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/api/reviews` | Create fact-check review |
-| GET | `/api/reviews/{id}` | Get full results |
-| GET | `/api/reviews/{id}/status` | Check progress |
-| GET | `/api/reviews/repository/all` | Browse all reviews |
-| POST | `/api/reviews/{id}/analyze` | Re-run analysis |
-
-### Spending Endpoints
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/spending/dashboard` | Current spending summary |
-| GET | `/spending/summary` | Detailed breakdown |
-
-Full API documentation at `http://localhost:8000/docs`
-
----
-
-## Architecture
-
-### Project Structure
+## 📁 Project Structure
 
 ```
 wisdom-agent/
 ├── backend/
-│   ├── main.py                 # FastAPI entry point
-│   ├── config.py               # Configuration
-│   ├── database/
-│   │   ├── connection.py       # DB setup
-│   │   ├── models.py           # Core models
-│   │   └── fact_check_models.py # Fact checker models
-│   ├── routers/
-│   │   ├── chat.py
-│   │   ├── sessions.py
-│   │   ├── projects.py
+│   ├── main.py           # FastAPI application entry
+│   ├── routers/          # API endpoints
 │   │   ├── review_router.py    # Fact checker
-│   │   └── spending.py
-│   ├── services/
-│   │   ├── llm_router.py       # Multi-provider routing
-│   │   ├── fact_check_service.py
-│   │   ├── claim_extraction_service.py
-│   │   ├── logic_analysis_service.py
-│   │   ├── wisdom_evaluation_service.py
-│   │   ├── review_service.py   # Orchestrator
-│   │   ├── conversation_service.py
-│   │   ├── reflection_service.py
-│   │   └── spending_service.py
-│   └── providers/
-│       ├── claimbuster.py
-│       ├── google_factcheck.py
-│       └── llm_verification.py
-│
+│   │   ├── knowledge.py        # Knowledge base
+│   │   └── ...
+│   ├── services/         # Business logic
+│   │   ├── review_service.py
+│   │   ├── knowledge_service.py
+│   │   └── ...
+│   ├── models/           # Pydantic models
+│   ├── database/         # DB models and connections
+│   └── providers/        # External API integrations
 ├── frontend/
-│   ├── src/app/
-│   │   ├── (dashboard)/
-│   │   │   ├── chat/
-│   │   │   ├── fact-checker/
-│   │   │   ├── sessions/
-│   │   │   ├── projects/
-│   │   │   ├── reflections/
-│   │   │   └── settings/
-│   ├── components/
-│   │   ├── Sidebar.tsx
-│   │   ├── ChatInterface.tsx
-│   │   └── ProjectCard.tsx
-│   └── lib/
-│       └── api.ts
-│
-├── data/philosophy/            # Something Deeperism texts
-├── docker-compose.yml
-└── README.md
+│   └── src/
+│       ├── app/          # Next.js pages
+│       │   ├── fact-checker/   # F/L/W Checker
+│       │   ├── knowledge/      # Knowledge Base
+│       │   └── ...
+│       ├── components/   # React components
+│       └── lib/          # Utilities and API client
+├── data/
+│   └── philosophy/       # Philosophy text files
+│       └── base/         # Core philosophy documents
+└── config/
+    └── llm_providers.json
 ```
 
-### Technology Stack
-
-| Layer | Technology |
-|-------|------------|
-| **Frontend** | Next.js 14, React 18, TypeScript, Tailwind CSS |
-| **Backend** | FastAPI, Python 3.11+, Pydantic |
-| **Database** | PostgreSQL 15 (or SQLite fallback) |
-| **LLM Providers** | Anthropic Claude, OpenAI GPT-4, Nebius Llama, Ollama |
-| **Fact Checking** | ClaimBuster API, Google Fact Check API, LLM Verification |
-
----
-
-## Roadmap
-
-### ✅ Phase 1: Core Platform (Complete)
-
-- [x] Multi-provider LLM support with model switching
-- [x] Session management with 7UV reflections
-- [x] **Fact & Logic & Wisdom Checker** (full pipeline working!)
-- [x] Spending tracking with visual widget
-- [x] Project management with archive
-- [x] Clean, contemplative UI design
-
-### 🚧 Phase 2: Enhanced Features (In Progress)
-
-- [ ] **Cost disclosure before operations** — show token estimates and model options
-- [ ] **Knowledge Base frontend** — UI for collections, resources, search
-- [ ] In-session fact-check button in chat
-- [ ] Session continuity (load previous session context)
-- [ ] Semantic search with pgvector
-- [ ] File upload for fact-checking
-
-### 📋 Phase 3: Community & Advanced
-
-- [ ] Public fact-check repository
-- [ ] Character interaction mode (chat with book characters)
-- [ ] Audio capabilities for language learning
-- [ ] Community resource sharing
-- [ ] Election monitoring tools
-- [ ] Media literacy education modules
-
-### 🔮 Phase 4: Wisdom AI
-
-- [ ] Self-evolving AI governance framework
-- [ ] AI agents using Wisdom Agent principles
-- [ ] Collective intelligence tools
-- [ ] Democracy and governance applications
-
----
-
-## Troubleshooting
+## 🔍 Troubleshooting
 
 ### Backend won't start
+- Check that all required API keys are set in `.env`
+- Ensure PostgreSQL is running if using `DATABASE_URL`
+- Check Python dependencies: `pip install -r requirements.txt`
 
-```bash
-# Check if running from correct directory
-pwd  # Should be wisdom-agent root, not backend/
+### "Knowledge Base tables" warnings
+- These are usually harmless if the tables already exist
+- If KB isn't working, check the database connection
 
-# Correct way to start:
-uvicorn backend.main:app --reload
-```
+### Fact Checker stuck on "Analyzing"
+- External fact-check APIs may be unavailable
+- The system will fall back to LLM verification (slower)
+- Check backend terminal for error messages
 
-### Database connection errors
+### Frontend not updating
+- Stop and restart: `npm run dev`
+- Clear browser cache or use incognito mode
 
-```bash
-# Option 1: Start Docker
-docker-compose up -d
+## 🎯 Roadmap
 
-# Option 2: Use SQLite (comment out DATABASE_URL in .env)
-# DATABASE_URL=postgresql://...  <- add # at start
-```
+### Completed
+- [x] Multi-LLM support with 5 providers
+- [x] Fact/Logic/Wisdom Checker with cost estimation
+- [x] Model selection per operation
+- [x] Budget tracking and limits
+- [x] Knowledge Base backend
 
-### Fact checker returns "unverifiable"
+### In Progress
+- [ ] Knowledge Base frontend completion
+- [ ] Fact checker reliability improvements
 
-This is normal when ClaimBuster has no existing fact-checks. The system falls back to LLM verification which provides actual verdicts.
+### Planned
+- [ ] **Thesis Wiki** - Hierarchical thesis system for studying complex topics
+  - Overview + drill-down navigation
+  - Media integration (videos, articles)
+  - Shareable resources for civic engagement
+- [ ] Global model selector (use preferred model everywhere)
+- [ ] Wisdom AI self-improvement mode
+- [ ] Public API for third-party integration
+- [ ] Democracy tools for election monitoring
 
-### Frontend shows 404
+## 🤝 Contributing
 
-Make sure you created the page files:
-```bash
-# fact-checker page should be at:
-frontend/src/app/(dashboard)/fact-checker/page.tsx
-```
-
----
-
-## Contributing
-
-We welcome contributions! 
-
-### Areas for Contribution
-
-- 🐛 Bug fixes
-- 📝 Documentation improvements  
-- 🎨 UI/UX enhancements
-- 🔌 New LLM provider integrations
-- ✅ Test coverage
-- 🌍 Internationalization
-
-### Development Workflow
+This is an open-source project welcoming contributions. Please:
 
 1. Fork the repository
-2. Create a feature branch: `git checkout -b feature/amazing-feature`
-3. Make your changes
-4. Test thoroughly
-5. Submit a pull request
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. **Read existing code before modifying** - understand what's there
+4. Make small, tested changes
+5. Ensure no existing features are broken
+6. Submit a pull request
+
+### Development Principles
+- **View before modify** - Always check existing code first
+- **Minimal changes** - Fix the bug, don't rewrite the file
+- **Test after each change** - Verify nothing broke
+- **Preserve functionality** - Working code > clean code
+
+## 📄 License
+
+[License type to be determined]
+
+## 🙏 Acknowledgments
+
+Built with:
+- [FastAPI](https://fastapi.tiangolo.com/) - Backend framework
+- [Next.js](https://nextjs.org/) - Frontend framework
+- [Anthropic Claude](https://www.anthropic.com/) - Primary AI provider
+- The wisdom traditions that inspire this work
 
 ---
 
-## License
+*"Something Deeperism" is a philosophical approach that seeks the deeper truth beneath surface appearances, guided by universal values that transcend cultural boundaries.*
 
-MIT License — see [LICENSE](LICENSE) for details.
+## 📞 Support
 
----
-
-## Acknowledgments
-
-- **Anthropic** for Claude and the inspiration to build AI that's genuinely helpful
-- **The open-source community** for the incredible tools we build upon
-- **Everyone seeking wisdom** in a complex world
-
----
-
-*"The goal is not to be right, but to become wise."*
-
-*"Pure Love is foundational reality — the Wisdom Agent helps us organize around it."*
+- **Issues**: Use GitHub Issues for bug reports and feature requests
+- **Documentation**: Check `/docs` endpoint when backend is running
+- **API Docs**: Visit `http://localhost:8000/docs` for Swagger UI

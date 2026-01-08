@@ -18,7 +18,6 @@ import {
   Archive,
   DollarSign,
   AlertTriangle,
-  Database,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getProjects, type Project } from '@/lib/api';
@@ -193,14 +192,9 @@ export function Sidebar({ className }: SidebarProps) {
       icon: History,
     },
     {
-      name: 'Fact/Logic/Wisdom',
+      name: 'Fact Checker',
       href: '/fact-checker',
       icon: CheckCircle,
-    },
-    {
-      name: 'Knowledge Base',
-      href: '/knowledge',
-      icon: Database,
     },
     {
       name: 'Projects',
