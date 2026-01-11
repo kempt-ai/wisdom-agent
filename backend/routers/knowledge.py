@@ -952,8 +952,9 @@ async def get_knowledge_stats(
             text("SELECT COUNT(*) FROM knowledge_collections WHERE user_id = :user_id"),
             {"user_id": user_id}
         )
-        collection_count = coll_cursor.fetchone()[0]
-        
+        coll_result = coll_cursor.fetchone()
+        collection_count = coll_result[0] if coll_result else 0
+
         # Count resources and tokens
         res_cursor = service.db.execute(
             text("""SELECT COUNT(*), COALESCE(SUM(token_count), 0), COALESCE(SUM(index_cost_dollars), 0)
@@ -961,7 +962,7 @@ async def get_knowledge_stats(
             {"user_id": user_id}
         )
         res_row = res_cursor.fetchone()
-        
+
         # Count indexes
         idx_cursor = service.db.execute(
             text("""SELECT COUNT(*) FROM resource_indexes ri
@@ -969,8 +970,9 @@ async def get_knowledge_stats(
                WHERE r.user_id = :user_id"""),
             {"user_id": user_id}
         )
-        index_count = idx_cursor.fetchone()[0]
-        
+        idx_result = idx_cursor.fetchone()
+        index_count = idx_result[0] if idx_result else 0
+
         # Count characters and author voices
         char_cursor = service.db.execute(
             text("""SELECT COUNT(*) FROM character_profiles cp
@@ -978,19 +980,21 @@ async def get_knowledge_stats(
                WHERE r.user_id = :user_id"""),
             {"user_id": user_id}
         )
-        character_count = char_cursor.fetchone()[0]
-        
+        char_result = char_cursor.fetchone()
+        character_count = char_result[0] if char_result else 0
+
         voice_cursor = service.db.execute(
             text("SELECT COUNT(*) FROM author_voices WHERE user_id = :user_id"),
             {"user_id": user_id}
         )
-        voice_count = voice_cursor.fetchone()[0]
-        
+        voice_result = voice_cursor.fetchone()
+        voice_count = voice_result[0] if voice_result else 0
+
         return {
             "collections": collection_count,
-            "resources": res_row[0],
-            "total_tokens": res_row[1],
-            "total_indexing_cost": round(res_row[2], 2),
+            "resources": res_row[0] if res_row else 0,
+            "total_tokens": res_row[1] if res_row else 0,
+            "total_indexing_cost": round(res_row[2], 2) if res_row else 0.0,
             "indexes": index_count,
             "characters": character_count,
             "author_voices": voice_count
