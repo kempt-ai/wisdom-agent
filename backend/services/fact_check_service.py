@@ -167,12 +167,15 @@ class FactCheckService:
                         claim_record.check_worthiness_score or 0.5
                     )
                     
+                    print(f"DEBUG: _check_single_claim returned: {result}")
                     logger.debug(f"Claim {claim_record.id} verdict: {result.get('verdict')}")
                     
                     # Save result to database
+                    print(f"DEBUG: About to save result for claim {claim_record.id}")
                     await self._save_fact_check_result(
                         db, claim_record.id, result
                     )
+                    print(f"DEBUG: Saved result for claim {claim_record.id}")
                     
                     results.append({
                         "claim_id": claim_record.id,
@@ -257,17 +260,24 @@ class FactCheckService:
                 # No matches found, fall through to other providers
                 logger.info(f"Google Fact Check found no matches, trying other providers")
         
+        
         # Try ClaimBuster
         claimbuster_provider = registry.get_provider(ProviderType.CLAIM_BUSTER)
         if claimbuster_provider and await claimbuster_provider.is_available():
-            result = await registry.check_claim(
-                claim_text,
-                providers=[ProviderType.CLAIM_BUSTER]
-            )
+            try:
+                result = await registry.check_claim(
+                    claim_text,
+                    providers=[ProviderType.CLAIM_BUSTER]
+                )
+            except Exception as e:
+                logger.warning(f"ClaimBuster API failed, falling through to LLM: {e}")
+                result = None
+            
+        
             
             # Only return ClaimBuster result if it found actual matches
             # Otherwise fall through to LLM verification
-            if result.get("results"):
+            if result and result.get("results"):
                 external_matches = self._extract_external_matches(result)
                 verdict = result.get("consensus_verdict", "unverifiable")
                 
@@ -283,14 +293,25 @@ class FactCheckService:
                 # Otherwise, ClaimBuster just gave check-worthiness score
                 # Fall through to LLM verification
                 logger.info(f"ClaimBuster found no matches for claim, using LLM fallback")
-        
+
+        print(f"DEBUG: About to try LLM verification provider")
         # Try LLM verification provider
         llm_provider = registry.get_provider(ProviderType.LLM_VERIFICATION)
-        if llm_provider and await llm_provider.is_available():
-            result = await registry.check_claim(
-                claim_text,
-                providers=[ProviderType.LLM_VERIFICATION]
-            )
+        print(f"DEBUG: LLM provider = {llm_provider}")
+        
+        is_avail = await llm_provider.is_available() if llm_provider else False
+        print(f"DEBUG: LLM provider is_available = {is_avail}")
+        if llm_provider and is_avail:
+            print(f"DEBUG: Calling LLM verification for claim: {claim_text[:50]}...")
+            try:
+                result = await registry.check_claim(
+                    claim_text,
+                    providers=[ProviderType.LLM_VERIFICATION]
+                )
+                print(f"DEBUG: LLM result = {result}")
+            except Exception as e:
+                print(f"DEBUG: LLM verification EXCEPTION: {e}")
+                result = None
             
             return {
                 "verdict": result.get("consensus_verdict", "unverifiable"),
