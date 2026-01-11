@@ -12,6 +12,7 @@ Date: 2025-12-20
 Phase: 2, Day 8
 """
 
+import asyncio
 import json
 import logging
 import re
@@ -160,8 +161,10 @@ class LLMVerificationProvider(FactCheckProvider):
             
             # Step 3: Get LLM analysis
             llm = self._get_llm_service()
-            
-            response = llm.complete(
+
+            # FIXED: Run synchronous LLM call in thread pool to avoid blocking event loop
+            response = await asyncio.to_thread(
+                llm.complete,
                 messages=[{"role": "user", "content": VERIFICATION_USER_PROMPT.format(
                     claim=claim,
                     search_results=formatted_results
@@ -292,7 +295,7 @@ Result {i}:
         formatted_results = self._format_search_results(search_results)
         
         llm = self._get_llm_service()
-        
+
         prompt = f"""Evaluate this claim based on the search evidence:
 
 CLAIM: {claim}
@@ -311,8 +314,10 @@ Respond with a JSON object:
   "key_evidence": [...],
   "sources_used": [...]
 }}"""
-        
-        response = llm.complete(
+
+        # FIXED: Run synchronous LLM call in thread pool to avoid blocking event loop
+        response = await asyncio.to_thread(
+            llm.complete,
             messages=[{"role": "user", "content": prompt}],
             system_prompt=VERIFICATION_SYSTEM_PROMPT,
             temperature=0.3,

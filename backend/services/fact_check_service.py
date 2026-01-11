@@ -326,7 +326,9 @@ VERDICT: [your verdict]
 CONFIDENCE: [your confidence]
 EXPLANATION: [your explanation]"""
 
-            response = llm.complete(
+            # FIXED: Run synchronous LLM call in thread pool to avoid blocking event loop
+            response = await asyncio.to_thread(
+                llm.complete,
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.1
             )
