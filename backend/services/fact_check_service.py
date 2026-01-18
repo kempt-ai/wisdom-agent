@@ -2,7 +2,7 @@
 Wisdom Agent - Fact Check Service
 
 Orchestrates fact-checking across multiple providers.
-Coordinates ClaimBuster, Google Fact Check API, and LLM verification
+Coordinates Google Fact Check API and LLM verification
 to produce comprehensive verification results.
 
 Author: Wisdom Agent Team
@@ -11,10 +11,17 @@ Phase: 2, Day 8 (supporting service)
 
 FIXED: 2024-12-31 - Auto-initialize providers when service is first used
 FIXED: 2025-01-01 - Properly load claims relationship with joinedload
+FIXED: 2026-01-15 - Added semantic relevance check for external fact-checks
+                    to prevent mismatches (e.g., fact-checks about what someone
+                    SAID being used to verify claims about WHO someone IS)
+FIXED: 2026-01-17 - Made relevance checking properly async to fix event loop bug
+FIXED: 2026-01-17 - Removed ClaimBuster provider (site has been down for months)
+FIXED: 2026-01-17 - Parallelized claim checking for ~70-80% speedup
 """
 
 import logging
 import asyncio
+import re
 from typing import Optional, List, Dict, Any
 
 from sqlalchemy.orm import joinedload
@@ -35,9 +42,12 @@ class FactCheckService:
     Service for fact-checking claims using multiple providers.
     
     Coordinates:
-    - ClaimBuster for check-worthiness and existing fact checks
     - Google Fact Check API for fact-check database search
     - LLM verification with web search for novel claims
+    
+    Note: ClaimBuster was removed 2026-01-17 as the service has been
+    unavailable for an extended period. Snopes FactBot could be added
+    as an alternative in the future: https://www.snopes.com/factbot/
     """
     
     def __init__(self):
@@ -50,20 +60,6 @@ class FactCheckService:
         if not self._providers_initialized:
             logger.info("Initializing fact-check providers...")
             registry = get_provider_registry()
-            
-            # Try to register ClaimBuster provider
-            try:
-                from backend.providers.claimbuster import ClaimBusterProvider
-                provider = ClaimBusterProvider()
-                if await provider.is_available():
-                    registry.register(provider)
-                    logger.info("Registered ClaimBuster provider")
-                else:
-                    logger.warning("ClaimBuster provider not available (check API key)")
-            except ImportError as e:
-                logger.debug(f"ClaimBuster provider not available: {e}")
-            except Exception as e:
-                logger.warning(f"Failed to initialize ClaimBuster: {e}")
             
             # Try to register Google Fact Check provider
             try:
@@ -154,42 +150,71 @@ class FactCheckService:
                     logger.warning(f"Claims were passed ({len(claims)}) but not found in DB - possible timing issue")
                 return []
             
-            logger.info(f"Processing {len(claim_list)} claims for review {review_id}")
+            logger.info(f"Processing {len(claim_list)} claims for review {review_id} (parallel)")
             
-            for claim_record in claim_list:
+            # ================================================================
+            # PARALLELIZED: Check all claims concurrently for major speedup
+            # Previously: ~40s per claim × 5 claims = ~200s sequential
+            # Now: ~40-50s total (limited by slowest claim)
+            # ================================================================
+            
+            async def check_claim_wrapper(claim_record):
+                """Wrapper to handle individual claim checking with error handling."""
                 try:
                     logger.debug(f"Fact-checking claim {claim_record.id}: {claim_record.claim_text[:50]}...")
-                    
-                    # Check this claim
                     result = await self._check_single_claim(
                         registry,
                         claim_record.claim_text,
                         claim_record.check_worthiness_score or 0.5
                     )
-                    
-                    print(f"DEBUG: _check_single_claim returned: {result}")
                     logger.debug(f"Claim {claim_record.id} verdict: {result.get('verdict')}")
-                    
-                    # Save result to database
-                    print(f"DEBUG: About to save result for claim {claim_record.id}")
-                    await self._save_fact_check_result(
-                        db, claim_record.id, result
-                    )
-                    print(f"DEBUG: Saved result for claim {claim_record.id}")
-                    
-                    results.append({
-                        "claim_id": claim_record.id,
-                        "claim_text": claim_record.claim_text,
-                        **result
-                    })
-                    
+                    return {
+                        "claim_record": claim_record,
+                        "result": result,
+                        "error": None
+                    }
                 except Exception as e:
                     logger.exception(f"Failed to fact-check claim {claim_record.id}: {e}")
+                    return {
+                        "claim_record": claim_record,
+                        "result": None,
+                        "error": str(e)
+                    }
+            
+            # Run all claim checks in parallel
+            check_tasks = [check_claim_wrapper(claim) for claim in claim_list]
+            check_results = await asyncio.gather(*check_tasks)
+            
+            # Save results to database sequentially (DB operations are fast)
+            for check_data in check_results:
+                claim_record = check_data["claim_record"]
+                result = check_data["result"]
+                error = check_data["error"]
+                
+                if error:
                     results.append({
                         "claim_id": claim_record.id,
                         "claim_text": claim_record.claim_text,
-                        "error": str(e)
+                        "error": error
                     })
+                else:
+                    try:
+                        # Save result to database
+                        await self._save_fact_check_result(
+                            db, claim_record.id, result
+                        )
+                        results.append({
+                            "claim_id": claim_record.id,
+                            "claim_text": claim_record.claim_text,
+                            **result
+                        })
+                    except Exception as e:
+                        logger.exception(f"Failed to save fact-check result for claim {claim_record.id}: {e}")
+                        results.append({
+                            "claim_id": claim_record.id,
+                            "claim_text": claim_record.claim_text,
+                            "error": f"Save failed: {str(e)}"
+                        })
             
             # FIXED: Explicit commit after all claims processed
             try:
@@ -215,9 +240,8 @@ class FactCheckService:
         Strategy:
         1. If check-worthiness is low (<0.3), skip detailed checking
         2. First check Google Fact Check for existing fact checks
-        3. If no results, try ClaimBuster database
-        4. If still no results, use LLM verification
-        5. If no providers available, use direct LLM fallback
+        3. If no results, use LLM verification with web search
+        4. If no providers available, use direct LLM fallback
         """
         # Skip low check-worthiness claims
         if check_worthiness < 0.3:
@@ -246,10 +270,14 @@ class FactCheckService:
             
             # Only return if Google found actual fact-checks
             if result.get("results"):
-                external_matches = self._extract_external_matches(result)
-                verdict = result.get("consensus_verdict", "unverifiable")
+                # FIXED: Pass our_claim for semantic relevance checking
+                # This filters out fact-checks that are about the same person but different claims
+                external_matches = await self._extract_external_matches(result, our_claim=claim_text)
                 
-                if external_matches or verdict not in ["unverifiable", None]:
+                # FIXED: Only use Google's verdict if we have RELEVANT matches after filtering
+                # If all matches were filtered out as irrelevant, fall through to LLM verification
+                if external_matches:
+                    verdict = result.get("consensus_verdict", "unverifiable")
                     return {
                         "verdict": verdict,
                         "confidence": result.get("confidence", 0.5),
@@ -257,43 +285,9 @@ class FactCheckService:
                         "providers_used": result.get("providers_used", []),
                         "external_matches": external_matches,
                     }
-                # No matches found, fall through to other providers
-                logger.info(f"Google Fact Check found no matches, trying other providers")
+                # No relevant matches found after filtering, fall through to LLM verification
+                logger.info(f"Google Fact Check matches were filtered as irrelevant, trying LLM verification")
         
-        
-        # Try ClaimBuster
-        claimbuster_provider = registry.get_provider(ProviderType.CLAIM_BUSTER)
-        if claimbuster_provider and await claimbuster_provider.is_available():
-            try:
-                result = await registry.check_claim(
-                    claim_text,
-                    providers=[ProviderType.CLAIM_BUSTER]
-                )
-            except Exception as e:
-                logger.warning(f"ClaimBuster API failed, falling through to LLM: {e}")
-                result = None
-            
-        
-            
-            # Only return ClaimBuster result if it found actual matches
-            # Otherwise fall through to LLM verification
-            if result and result.get("results"):
-                external_matches = self._extract_external_matches(result)
-                verdict = result.get("consensus_verdict", "unverifiable")
-                
-                # If ClaimBuster found actual fact-checks, use them
-                if external_matches or verdict not in ["unverifiable", None]:
-                    return {
-                        "verdict": verdict,
-                        "confidence": result.get("confidence", 0.5),
-                        "explanation": self._extract_explanation(result),
-                        "providers_used": result.get("providers_used", []),
-                        "external_matches": external_matches,
-                    }
-                # Otherwise, ClaimBuster just gave check-worthiness score
-                # Fall through to LLM verification
-                logger.info(f"ClaimBuster found no matches for claim, using LLM fallback")
-
         print(f"DEBUG: About to try LLM verification provider")
         # Try LLM verification provider
         llm_provider = registry.get_provider(ProviderType.LLM_VERIFICATION)
@@ -394,24 +388,257 @@ EXPLANATION: [your explanation]"""
                 "providers_used": [],
             }
     
-    def _extract_external_matches(self, result: Dict[str, Any]) -> List[Dict[str, Any]]:
-        """Extract external fact check matches from provider results."""
+    # ========================================================================
+    # EXTERNAL MATCH EXTRACTION WITH SEMANTIC RELEVANCE CHECK
+    # ========================================================================
+    
+    async def _extract_external_matches(
+        self, 
+        result: Dict[str, Any], 
+        our_claim: str = ""
+    ) -> List[Dict[str, Any]]:
+        """
+        Extract external fact check matches from provider results.
+        
+        IMPORTANT: When our_claim is provided, verifies semantic relevance 
+        before including matches. A fact-check about the same PERSON is not 
+        necessarily about the same CLAIM (e.g., a fact-check about what 
+        RFK Jr. SAID about vaccines tells us nothing about whether he IS 
+        the Health Secretary).
+        
+        Args:
+            result: The provider result containing potential matches
+            our_claim: The original claim we're trying to verify (optional)
+            
+        Returns:
+            List of relevant external fact-check matches
+        """
         matches = []
         for provider_result in result.get("results", []):
             sources = provider_result.get("sources", [])
             for source in sources:
                 if isinstance(source, dict):
+                    # Get the fact-check claim - different providers use different keys
+                    # Google Fact Check uses "claim_reviewed", others might use "claim_text"
+                    factcheck_claim = (
+                        source.get("claim_reviewed") or 
+                        source.get("claim_text") or 
+                        ""
+                    )
+                    # Get the rating/verdict - providers use different keys
+                    factcheck_rating = (
+                        source.get("verdict") or 
+                        source.get("rating") or 
+                        ""
+                    )
+                    
+                    # If we have our original claim and a fact-check claim, verify relevance
+                    if our_claim and factcheck_claim:
+                        is_relevant = await self._verify_factcheck_relevance(
+                            our_claim=our_claim,
+                            factcheck_claim=factcheck_claim,
+                            factcheck_rating=factcheck_rating
+                        )
+                        if not is_relevant:
+                            logger.info(
+                                f"Rejected irrelevant fact-check: '{factcheck_claim[:60]}...' "
+                                f"does not match our claim: '{our_claim[:60]}...'"
+                            )
+                            continue
                     matches.append(source)
         return matches
+    
+    async def _verify_factcheck_relevance(
+        self, 
+        our_claim: str, 
+        factcheck_claim: str, 
+        factcheck_rating: str
+    ) -> bool:
+        """
+        Verify that an external fact-check is actually about our claim,
+        not just about the same person or topic.
+        
+        Uses heuristic checks first (free), then LLM if needed (cheap).
+        
+        Args:
+            our_claim: The claim we're trying to verify
+            factcheck_claim: The claim that was checked in the external fact-check
+            factcheck_rating: The rating/verdict from the external fact-check
+            
+        Returns:
+            True if the fact-check is relevant to our claim, False otherwise
+        """
+        # Quick heuristic checks first (no LLM cost)
+        
+        # Normalize for comparison
+        our_lower = our_claim.lower().strip()
+        fc_lower = factcheck_claim.lower().strip()
+        
+        # If claims are very similar (>60% word overlap), probably relevant
+        our_words = set(our_lower.split())
+        fc_words = set(fc_lower.split())
+        
+        if len(our_words) > 0 and len(fc_words) > 0:
+            overlap = len(our_words & fc_words) / max(len(our_words), len(fc_words))
+            if overlap > 0.6:
+                logger.debug(f"Heuristic acceptance: high word overlap ({overlap:.2f})")
+                return True
+        
+        # Check for obvious mismatches:
+        # If our claim is about a position/role and the fact-check is about something they SAID
+        position_indicators = [
+            "is", "was", "became", "appointed", "elected", "serves as", 
+            "secretary", "president", "ceo", "director", "minister", 
+            "governor", "mayor", "chairman", "chief"
+        ]
+        statement_indicators = [
+            "said", "claimed", "stated", "tweeted", "posted", "according to",
+            "argues", "believes", "asserts", "suggests", "wrote"
+        ]
+        
+        our_is_about_position = any(ind in our_lower for ind in position_indicators)
+        fc_is_about_statement = any(ind in fc_lower for ind in statement_indicators)
+        
+        if our_is_about_position and fc_is_about_statement:
+            # Our claim is about WHO someone IS, fact-check is about what they SAID
+            # These are different types of claims
+            logger.debug(f"Heuristic rejection: position claim vs statement claim")
+            return False
+        
+        # Check if fact-check is about a SPECIFIC DATE but our claim is general
+        # e.g., "confirmed on Feb. 4" vs "is the Health Secretary"
+        date_patterns = [
+            r'\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+\d{1,2}',
+            r'\b\d{1,2}\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)',
+            r'\b(january|february|march|april|may|june|july|august|september|october|november|december)\s+\d{1,2}',
+            r'\b\d{4}\b',  # Year
+            r'\bon\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)',
+        ]
+        fc_has_specific_date = any(re.search(pattern, fc_lower) for pattern in date_patterns)
+        our_has_specific_date = any(re.search(pattern, our_lower) for pattern in date_patterns)
+        
+        if fc_has_specific_date and not our_has_specific_date:
+            # Fact-check is about a specific date/time, but our claim is general
+            # The fact-check verdict might be about the DATE being wrong, not the claim itself
+            logger.debug(f"Heuristic rejection: fact-check has specific date, our claim is general")
+            return False
+        
+        # Check if the fact-check claim contains completely different subject matter
+        our_topics = self._extract_key_topics(our_claim)
+        fc_topics = self._extract_key_topics(factcheck_claim)
+        
+        if our_topics and fc_topics:
+            topic_overlap = len(our_topics & fc_topics) / max(len(our_topics), len(fc_topics))
+            if topic_overlap < 0.15:
+                # Very little topic overlap - probably unrelated
+                logger.debug(f"Heuristic rejection: low topic overlap ({topic_overlap:.2f})")
+                return False
+        
+        # If heuristics are inconclusive, use LLM verification
+        # (This is the expensive path, but more accurate)
+        return await self._verify_relevance_with_llm(our_claim, factcheck_claim, factcheck_rating)
+    
+    def _extract_key_topics(self, text: str) -> set:
+        """
+        Extract key topic words from text (nouns, proper nouns).
+        Simple extraction without NLP dependencies.
+        """
+        # Common stopwords to filter out
+        stopwords = {
+            'the', 'a', 'an', 'is', 'was', 'are', 'were', 'been', 'be', 
+            'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 
+            'could', 'should', 'may', 'might', 'must', 'shall', 'can',
+            'to', 'of', 'in', 'for', 'on', 'with', 'at', 'by', 'from',
+            'that', 'which', 'who', 'whom', 'this', 'these', 'those',
+            'and', 'or', 'but', 'if', 'then', 'than', 'so', 'as', 'not',
+            'no', 'yes', 'all', 'any', 'some', 'each', 'every', 'both',
+            'few', 'more', 'most', 'other', 'into', 'over', 'such', 'only'
+        }
+        
+        # Extract words (3+ chars), filter stopwords
+        words = re.findall(r'\b[a-zA-Z]{3,}\b', text.lower())
+        topics = {w for w in words if w not in stopwords}
+        
+        return topics
+    
+    async def _verify_relevance_with_llm(
+        self, 
+        our_claim: str, 
+        factcheck_claim: str, 
+        factcheck_rating: str
+    ) -> bool:
+        """
+        Use LLM to verify if a fact-check is semantically relevant to our claim.
+        This is more expensive but more accurate than heuristics alone.
+        
+        Args:
+            our_claim: The claim we're trying to verify
+            factcheck_claim: The claim from the external fact-check
+            factcheck_rating: The rating from the external fact-check
+            
+        Returns:
+            True if the fact-check is relevant, False otherwise
+        """
+        prompt = f"""I need to verify if an external fact-check is relevant to the claim I'm checking.
+
+MY CLAIM TO VERIFY: "{our_claim}"
+
+EXTERNAL FACT-CHECK FOUND:
+- Claim that was checked: "{factcheck_claim}"
+- Verdict given: "{factcheck_rating}"
+
+QUESTION: Is this fact-check about THE SAME CLAIM as mine?
+
+Important considerations:
+- Same person mentioned ≠ same claim (e.g., "RFK Jr. claimed vaccines cause autism is FALSE" tells us nothing about "RFK Jr. is Health Secretary")
+- Same topic mentioned ≠ same claim (e.g., a fact-check about one specific donation doesn't verify general campaign finance rules)
+- A fact-check about a SPECIFIC DATE or DETAIL (e.g., "confirmed on Feb 4") doesn't verify the GENERAL claim (e.g., "is Health Secretary")
+- The fact-check must DIRECTLY address the truth of my specific claim
+
+Answer with just YES or NO, then a brief reason."""
+
+        try:
+            from backend.services.llm_router import get_llm_router
+            llm = get_llm_router()
+            
+            # Run synchronous LLM call in thread pool to avoid blocking
+            response = await asyncio.to_thread(
+                llm.complete,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.0,  # Deterministic for consistency
+                max_tokens=100  # Short response needed
+            )
+            
+            # Parse response - look for YES or NO at the start
+            response_lower = response.lower().strip()
+            is_relevant = response_lower.startswith("yes")
+            
+            logger.debug(f"LLM relevance check: {is_relevant} - {response[:100]}")
+            return is_relevant
+            
+        except Exception as e:
+            logger.warning(f"LLM relevance check failed: {e}, defaulting to include")
+            # On error, include the fact-check (conservative approach - don't lose potentially relevant info)
+            return True
+    
+    # ========================================================================
+    # WEB SOURCE EXTRACTION
+    # ========================================================================
     
     def _extract_web_sources(self, result: Dict[str, Any]) -> List[Dict[str, Any]]:
         """Extract web sources from LLM verification results."""
         sources = []
         for provider_result in result.get("results", []):
-            raw = provider_result.get("raw_response", {})
-            if isinstance(raw, dict):
-                search_results = raw.get("search_results", [])
-                sources.extend(search_results[:5])  # Limit to 5 sources
+            # First check direct sources (from LLM verification provider)
+            direct_sources = provider_result.get("sources", [])
+            if direct_sources:
+                sources.extend(direct_sources[:10])  # Limit to 10 sources
+            else:
+                # Fallback to raw_response.search_results for backwards compatibility
+                raw = provider_result.get("raw_response", {})
+                if isinstance(raw, dict):
+                    search_results = raw.get("search_results", [])
+                    sources.extend(search_results[:10])
         return sources
     
     def _extract_explanation(self, result: Dict[str, Any]) -> str:

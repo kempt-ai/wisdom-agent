@@ -176,16 +176,30 @@ class LLMVerificationProvider(FactCheckProvider):
             # Step 4: Parse response
             analysis = self._parse_llm_response(response)
             
+            # Build sources from ACTUAL search results, not LLM's memory of them
+            # The LLM might cite sources_used, but we already have the real URLs
+            llm_cited_urls = set(analysis.get("sources_used", []))
+            
+            sources = []
+            for result in search_results:
+                source_entry = {
+                    "url": result.url,
+                    "title": result.title,
+                    "snippet": result.snippet,
+                    "type": "web_search"
+                }
+                # Mark if LLM specifically cited this source
+                if result.url in llm_cited_urls:
+                    source_entry["llm_cited"] = True
+                sources.append(source_entry)
+            
             return ProviderResult(
                 provider=self.provider_type,
                 status=VerificationStatus.SUCCESS,
                 verdict=analysis.get("verdict", "unverifiable"),
                 confidence=self._parse_confidence(analysis.get("confidence", 0.5)),
                 explanation=analysis.get("explanation", ""),
-                sources=[
-                    {"url": url, "type": "web_search"} 
-                    for url in analysis.get("sources_used", [])
-                ],
+                sources=sources,
                 raw_response={
                     "analysis": analysis,
                     "search_results": [r.to_dict() for r in search_results]
@@ -325,15 +339,27 @@ Respond with a JSON object:
         
         analysis = self._parse_llm_response(response)
         
+        # Build sources from actual search results, not LLM's memory
+        llm_cited_urls = set(analysis.get("sources_used", []))
+        
+        sources = []
+        for result in search_results:
+            source_entry = {
+                "url": result.url,
+                "title": result.title,
+                "snippet": result.snippet,
+                "type": "web_search"
+            }
+            if result.url in llm_cited_urls:
+                source_entry["llm_cited"] = True
+            sources.append(source_entry)
+        
         return ProviderResult(
             provider=self.provider_type,
             status=VerificationStatus.SUCCESS,
             verdict=analysis.get("verdict", "unverifiable"),
             confidence=self._parse_confidence(analysis.get("confidence", 0.5)),
             explanation=analysis.get("explanation", ""),
-            sources=[
-                {"url": url, "type": "web_search"} 
-                for url in analysis.get("sources_used", [])
-            ],
-            raw_response={"analysis": analysis}
+            sources=sources,
+            raw_response={"analysis": analysis, "search_results": [r.to_dict() for r in search_results]}
         )

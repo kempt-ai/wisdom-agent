@@ -432,9 +432,9 @@ class ReviewService:
             fact_results = await self._fact_check_claims(review_id, claims)
             print(f"DEBUG: Fact check complete, got {len(fact_results)} results")
             
-            # Step 4: Logic analysis
+            # Step 4: Logic analysis (now receives fact-check results for soundness assessment)
             await self._update_status(review_id, ReviewStatus.LOGIC_ANALYSIS)
-            logic_results = await self._analyze_logic(review_id, content)
+            logic_results = await self._analyze_logic(review_id, content, fact_results)
             print(f"DEBUG: Logic analysis complete")
             
             # Step 5: Wisdom evaluation
@@ -487,10 +487,23 @@ class ReviewService:
         results = await service.fact_check_claims(review_id, claims)
         return results
     
-    async def _analyze_logic(self, review_id: int, content: str) -> Dict[str, Any]:
-        """Analyze logical structure and fallacies."""
+    async def _analyze_logic(
+        self, 
+        review_id: int, 
+        content: str,
+        fact_check_results: Optional[List[Dict[str, Any]]] = None
+    ) -> Dict[str, Any]:
+        """
+        Analyze logical structure and fallacies.
+        
+        Args:
+            review_id: The review ID
+            content: The content to analyze
+            fact_check_results: Optional list of fact-check results to integrate
+                               into soundness assessment
+        """
         service = self._get_logic_analysis()
-        results = await service.analyze_logic(review_id, content)
+        results = await service.analyze_logic(review_id, content, fact_check_results)
         return results
     
     async def _evaluate_wisdom(

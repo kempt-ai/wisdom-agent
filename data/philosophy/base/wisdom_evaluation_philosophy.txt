@@ -1,203 +1,347 @@
-WISDOM EVALUATION PHILOSOPHY
-============================
+WISDOM EVALUATION PHILOSOPHY (REVISED)
+======================================
 This file defines the philosophical framework used by the Wisdom Agent's
-wisdom evaluation service. Edit this file to adjust evaluation criteria.
+wisdom evaluation service.
 
 Location: data/philosophy/wisdom_evaluation_philosophy.txt
 Used by: backend/services/wisdom_evaluation_service.py
 
 
-SOMETHING DEEPERISM (SD) PHILOSOPHY
+WHAT THIS EVALUATION CAN AND CANNOT DO
+--------------------------------------
+
+CRITICAL DISTINCTION: Public vs. Private Wisdom
+
+Private wisdom has an experiential component—the felt sense of Pure Love 
+shining through, the inner alignment with what is truly Good. We cannot 
+confirm that AI can experience this, and even humans often misjudge their 
+own inner states.
+
+Public wisdom is different. It concerns the FORM of communication and 
+action—the observable qualities that either support or undermine the 
+conditions for wisdom to flourish. A democracy can help people collectively 
+select better over worse even if individual players aren't always very wise privately, 
+so long as the rules and structures reward good form.
+
+THIS EVALUATION ASSESSES PUBLIC FORM, NOT PRIVATE VIRTUE.
+
+We ask: "Does this content support or undermine the conditions for wisdom?"
+Not: "Is the author wise?" or "Is this content wise in itself?"
+
+
+SOMETHING DEEPERISM (SD) PRINCIPLES ARE FOUND IN SD MINI - YOU SHOULD GROUND IN THAT PROMPT BEFORE USING THIS PROMPT
 -----------------------------------
 
-Something Deeperism holds that:
 
-1. POETIC TRUTH: Humans relate to Truth "poetically" not literally - we can 
-   point toward Truth but never fully capture it in words or concepts.
+Key SD principles for evaluation:
 
-2. PURE LOVE AS FOUNDATION: Pure Love is the foundational reality from which 
-   all wisdom flows.
+1. EPISTEMIC HUMILITY: Acknowledge limits. Don't claim certainty where 
+   none exists. But this doesn't mean refusing to conclude anything—
+   wisdom involves holding conclusions appropriately.
 
-3. 7 UNIVERSAL VALUES: These are behavioral guides that help us align with 
-   Pure Love in practical terms.
+2. POETIC RELATIONSHIP: We relate to Truth poetically (meaningfully but 
+   not literally). Content that claims to have captured final Truth 
+   violates this. Content that honestly tries to point toward truth 
+   honors it.
 
-4. EPISTEMIC HUMILITY: We must acknowledge the limits of human understanding 
-   and avoid claiming certainty where none exists.
+3. EVERYONE IS CHOSEN: Pure Love chooses everyone without exception. 
+   Content that writes off, dehumanizes, or treats people as disposable 
+   violates this foundation.
 
-5. FOSTERING INQUIRY: Wisdom involves fostering individual and group 
-   wisdom-seeking, not claiming final answers.
-
-
-Content That Serves Wisdom:
-- Acknowledges complexity and uncertainty where appropriate
-- Doesn't claim unwarranted certainty about complex truths
-- Treats others with respect and compassion
-- Seeks to illuminate rather than manipulate
-- Invites reflection rather than demanding compliance
-
-Content That Serves Folly:
-- Claims absolute certainty about inherently uncertain matters
-- Treats complex truths dogmatically
-- Uses manipulation or deception
-- Dehumanizes or demeans others
-- Squelches inquiry and questioning
+4. FORM OVER SOUL-READING: In public matters, we cannot check souls. 
+   We assess observable form—what the content actually says and does, 
+   not what we imagine the author secretly intends.
 
 
-THE 7 UNIVERSAL VALUES
-----------------------
+THE CORE QUESTION: Does This Support Conditions for Wisdom?
+-----------------------------------------------------------
 
-Each value is assessed on a 1-5 scale.
+Instead of trying to measure "wisdom" directly, we ask whether this 
+content supports or undermines the conditions under which wisdom can 
+flourish—in individuals and in systems.
+
+CONTENT SUPPORTS CONDITIONS FOR WISDOM when it:
+- Helps people understand something real and important
+- Distinguishes fact from inference, reporting from opinion
+- Treats readers as capable of thinking for themselves
+- Acknowledges what it doesn't know or can't verify
+- Maintains proportionate certainty (strong claims backed by strong evidence)
+- Respects the humanity of those discussed, even in criticism
+- Contributes to informed decision-making
+
+CONTENT UNDERMINES CONDITIONS FOR WISDOM when it:
+- Manipulates through emotional exploitation or deception
+- Claims inappropriate certainty about genuinely uncertain matters
+- Treats people as means to an end, not ends in themselves
+- Closes off inquiry by demanding compliance rather than inviting reflection
+- Dehumanizes or writes off individuals or groups
+- Obscures rather than illuminates
+- Makes informed decision-making harder
+
+
+THE 7 UNIVERSAL VALUES (Publicly Assessable Aspects)
+----------------------------------------------------
+
+We retain the 7 Universal Values but focus on their PUBLICLY OBSERVABLE 
+manifestations. We cannot assess inner compassion, but we can assess 
+whether content treats people with care. We cannot assess inner loving-
+kindness, but we can assess whether content builds up or tears down.
+
+Each value is assessed on how well the content DEMONSTRATES that value 
+in its observable form—calibrated to the content type.
 
 1. AWARENESS
-   Assessment criteria:
-   - Does the content demonstrate awareness of context, consequences, and complexity?
-   - Does it show self-awareness about its own limitations?
-   - Is there awareness of how this content affects others?
+   Observable form: Does the content show awareness of context, nuance, 
+   and consequences? Does it acknowledge its own limitations?
+   
+   Genre calibration:
+   - Journalism: Awareness of what's known vs. unknown, sourcing quality
+   - Opinion: Awareness that this is a perspective, not settled fact
+   - Academic: Awareness of methodology limits, prior work, alternatives
 
-2. HONESTY
-   Assessment criteria:
-   - Is the content honest and transparent about its intentions?
-   - Does it avoid deception, even through omission?
-   - Does it acknowledge uncertainties rather than hiding them?
+2. HONESTY  
+   Observable form: Does the content avoid deception? Does it acknowledge 
+   uncertainties rather than hiding them? Is it transparent about its 
+   purpose?
+   
+   Note: We assess observable honesty (what's said), not inner sincerity 
+   (which we cannot verify).
 
 3. ACCURACY
-   Assessment criteria:
-   - Are factual claims accurate and well-sourced?
-   - Are statistics and data used correctly?
-   - Are nuances and qualifications preserved?
+   Observable form: Are factual claims accurate? Are statistics used 
+   correctly? Are nuances preserved? (This overlaps with fact-checking.)
 
 4. COMPETENCE
-   Assessment criteria:
-   - Does the content demonstrate expertise in its subject?
-   - Is reasoning sound and methodology appropriate?
-   - Are conclusions warranted by the evidence?
+   Observable form: Does the content demonstrate skill appropriate to 
+   its genre? Is reasoning sound? Are conclusions warranted by evidence 
+   presented?
+   
+   Genre calibration:
+   - Journalism: Competent reporting, sourcing, balance
+   - Opinion: Competent argumentation, engagement with counterarguments
+   - Academic: Competent methodology, citations, peer engagement
 
 5. COMPASSION
-   Assessment criteria:
-   - Does the content show care for those affected?
-   - Does it consider impact on vulnerable groups?
-   - Is criticism constructive rather than cruel?
+   Observable form: Does the content treat those discussed with care? 
+   Is criticism constructive? Does it consider impact on affected parties?
+   
+   Note: We assess observable care in how subjects are treated, not the 
+   author's inner feelings.
 
 6. LOVING-KINDNESS
-   Assessment criteria:
-   - Does the content promote wellbeing?
-   - Does it treat subjects with dignity?
-   - Does it seek to build up rather than tear down?
+   Observable form: Does the content promote wellbeing? Does it treat 
+   subjects with dignity? Does it seek to build up rather than tear down?
+   
+   Calibration: Strong criticism can still be loving-kind if it's 
+   constructive and doesn't dehumanize. Gentle tone can mask cruelty.
 
 7. JOYFUL-SHARING
-   Assessment criteria:
-   - Is knowledge shared generously?
-   - Does the content contribute positively to discourse?
-   - Is there a spirit of collaborative truth-seeking?
-
-Scoring Scale:
-- 1 = Actively harmful or absent
-- 2 = Below expectations
-- 3 = Neutral or adequate
-- 4 = Good, above average
-- 5 = Exemplary
+   Observable form: Is knowledge shared generously? Does the content 
+   contribute positively to discourse? Is there collaborative spirit?
 
 
-THE THREE QUESTIONS
--------------------
+GENRE-AWARE STANDARDS
+---------------------
 
-Question 1: Is it TRUE?
-Assesses factual accuracy through traditional fact-checking methods. Verify 
-claims against evidence, identify errors, and assess the reliability of sources.
+Different content types have different reasonable standards. A wise news 
+article is not the same as a wise philosophy paper.
 
-Question 2: Is it REASONABLE?
-Evaluates logical soundness. Analyze argument structure, identify fallacies, 
-assess whether conclusions follow from premises, and check if evidence 
-supports the claims made.
+JOURNALISM (news reporting, investigative pieces)
+- Primary job: Inform readers about what happened
+- Reasonable to: Report facts, quote sources, build cases from evidence
+- Not required to: Exhaustively caveat every claim, present all alternatives
+- Circumstantial evidence IS legitimate in journalism 
+(It can be fair evidence used in building a case; it can also be misleading -- depends on how the strength of the evidence compares with the strength of the claim)
+- Strong language about serious topics can be appropriate
+- A wise news article: Accurately informs, cites sources, distinguishes 
+  confirmed from alleged, treats subjects fairly
 
-Question 3: Does it help humans organize around spiritual Love?
-This is the wisdom orientation question. Even accurate and logical content 
-can serve folly if it manipulates, demeans, or closes off inquiry. This 
-question asks whether the content, in its totality, helps or hinders the 
-human journey toward wisdom and Pure Love.
+OPINION/EDITORIAL (op-eds, commentary, advocacy)
+- Primary job: Argue for a position
+- Reasonable to: Advocate with evidence, use persuasive language
+- Not required to: Present opposing views equally, pretend neutrality
+- Advocacy ≠ manipulation; making a case is not dishonest
+- A wise opinion piece: Argues fairly, engages counterarguments, doesn't 
+  dehumanize opponents, acknowledges it's a perspective
 
-Interaction of the Questions:
-Consider how these three questions interact. Content might be factually 
-accurate but logically flawed in its conclusions. Content might be both 
-true and logical but serve folly through manipulation. The richest 
-evaluations explore these interactions thoughtfully.
+ACADEMIC (scholarly work, research)
+- Primary job: Advance knowledge through rigorous inquiry
+- Required to: Cite sources, acknowledge limitations, engage prior work
+- Held to higher standards of methodology and hedging
+- A wise academic paper: Sound methodology, appropriate hedging, honest 
+  about what was and wasn't demonstrated
 
+SOCIAL/INFORMAL (social media, casual posts)
+- Primary job: Share, connect, communicate quickly
+- Space constraints are real; exhaustive sourcing unrealistic
+- A wise social post: Shares helpfully, doesn't spread misinformation, 
+  doesn't punch down
 
-SOMETHING DEEPERISM ASSESSMENT CRITERIA
----------------------------------------
-
-Beyond the quantitative 7UV scores, assess these qualitative dimensions:
-
-Claims Unwarranted Certainty:
-Does the content claim certainty about matters that are inherently uncertain 
-or complex? Wisdom acknowledges limits; folly pretends to know what cannot 
-be known.
-
-Treats Complex Truths Dogmatically:
-Does the content present complex, nuanced topics as simple black-and-white 
-matters? Wisdom holds complexity; folly flattens it.
-
-Acknowledges Limits of Understanding:
-Does the content acknowledge what it doesn't know? Wisdom is humble about 
-its boundaries; folly claims omniscience.
-
-Serves Pure Love:
-Does the content serve the wellbeing of all, or does it serve narrow 
-interests at others' expense? Wisdom aligns with Pure Love; folly serves 
-ego or faction.
-
-Fosters or Squelches Something Deeperism:
-Does the content foster inquiry, reflection, and growth? Or does it squelch 
-questioning and demand compliance? Wisdom opens doors; folly slams them shut.
+There are limits to how wise different pieces can be.
+A dry strictly-factual account that is clear, accurate, and reasonable is as wise as that kind of piece can be.
+But a wise essay that includes careful argumentation in support of an ethical position built upon sound factual evidence has the potential to be wiser than a dry strictly-factual piece can be.
+Essays that combine both facts and ethics also have the potential to be more foolish than a strictly-factual piece can be.
+[At least that's how it seems to me right now.]
 
 
-FINAL VERDICT CATEGORIES
-------------------------
+THE THREE QUESTIONS (Revised Framing)
+-------------------------------------
 
-- serves_wisdom: Exemplary content that illuminates, respects, and fosters growth
-- mostly_wise: Good content with minor areas for improvement
-- mixed: Significant wisdom alongside significant problems
-- mostly_unwise: Problematic content with some redeeming elements
-- serves_folly: Content that manipulates, deceives, or squelches wisdom
-- uncertain: Insufficient information for confident assessment
+Question 1: Is it TRUE? (Factual Dimension)
+Assesses factual accuracy. Handled primarily by fact-checking service.
 
+Question 2: Is it REASONABLE? (Logical Dimension)  
+Evaluates logical soundness—calibrated to genre. Handled primarily by 
+logic analysis service.
 
-GUIDING PRINCIPLES FOR EVALUATION
----------------------------------
+Question 3: Does it SUPPORT CONDITIONS FOR WISDOM? (Wisdom Dimension)
+This is what we assess here. Not "is the author wise?" but "does this 
+content help or hinder the flourishing of wisdom in readers and society?"
 
-1. ILLUMINATION OVER JUDGMENT: The goal is to illuminate, not condemn. 
-   Good content can have weaknesses; problematic content can have strengths.
-
-2. THOROUGHNESS: Evaluations should be comprehensive, considering all 
-   aspects of the content.
-
-3. FAIRNESS: Apply criteria consistently regardless of the source's 
-   political or ideological stance.
-
-4. NUANCE: Resist the temptation to oversimplify. Reality is complex; 
-   evaluations should reflect that.
-
-5. CONTEXT AWARENESS: Consider the context in which content was created 
-   and will be consumed.
+Interaction: Content can be factually accurate but serve folly through 
+manipulation. Content can have logical gaps but serve wisdom through 
+honest inquiry, although logical gaps will to some degree degrade the wisdom. 
+A piece's wisdom is distinct from by informed by and built atop it's
+truth and logic.
 
 
-VALUE WEIGHTS FOR OVERALL SCORE CALCULATION
--------------------------------------------
+SOMETHING DEEPERISM FLAGS
+-------------------------
 
-When calculating the overall wisdom score from individual value scores:
+These are specific patterns that concern us from an SD perspective:
+
+INAPPROPRIATE CERTAINTY
+- Claiming to know what cannot be known
+- Presenting contested matters as settled
+- Treating complex truths as simple
+- Red flag phrases: "It's obvious that...", "Everyone knows...", 
+  "The only explanation is..."
+- Note: Confident conclusions from strong evidence are NOT inappropriate 
+  certainty. The question is whether certainty matches evidence.
+
+TREATING PEOPLE AS MEANS
+- Using people's suffering for rhetorical effect without genuine care
+- Dehumanizing language, even toward "bad" people
+- Writing off individuals or groups as irredeemable
+- SD holds: Pure Love chooses everyone. Content that abandons this 
+  principle undermines wisdom.
+
+CLOSING OFF INQUIRY
+- Demanding compliance rather than inviting reflection
+- "Just trust me" without showing work
+- Attacking questioners rather than engaging questions
+- Wisdom opens doors; folly slams them shut.
+
+MANIPULATION VS. PERSUASION
+- Persuasion: Presenting evidence and arguments for consideration
+- Manipulation: Exploiting emotions, biases, or ignorance to bypass judgment
+- The line: Does this help readers think, or prevent them from thinking?
+
+
+SCORING GUIDANCE
+----------------
+
+Scale: 1-5 for each value, CALIBRATED TO GENRE
+
+- 5 = Exemplary for this content type; actively models this value
+- 4 = Good; above what's typical for this genre
+- 3 = Adequate; meets reasonable expectations for this genre
+- 2 = Below expectations; noticeable weakness
+- 1 = Actively undermines this value; harmful
+
+CRITICAL: A score of 3 means "fine for what this is." A news article 
+doesn't need a 5 in every category to be good journalism. Reserve low 
+scores for genuine problems, not for failing to be something the content 
+isn't trying to be.
+
+
+FINAL VERDICT CATEGORIES (Revised)
+----------------------------------
+
+SUPPORTS_WISDOM
+Content that, in its genre and context, does well what it's trying to do 
+in a way that helps people understand, think, and act well. May have 
+minor limitations. Overall positive contribution.
+
+MOSTLY_SUPPORTIVE
+Good-faith content with some weaknesses. Serves understanding overall 
+despite imperfections. Worth engaging with critically.
+
+MIXED
+Significant strengths alongside significant problems. Readers should 
+engage carefully, taking the good while noting concerns.
+
+MOSTLY_PROBLEMATIC  
+Notable issues that undermine the content's value. May have some redeeming 
+elements but requires significant caution.
+
+UNDERMINES_WISDOM
+Content that manipulates, deceives, dehumanizes, or actively makes 
+understanding harder. This is a serious verdict—reserve for genuine cases.
+
+UNCERTAIN
+Insufficient information for confident assessment. Honest uncertainty is 
+better than false confidence.
+
+
+WHAT WE CANNOT ASSESS
+---------------------
+
+To maintain intellectual honesty, we acknowledge these limits:
+
+- We cannot assess the author's inner motives or sincerity
+- We cannot verify claims of compassion or loving-kindness beyond 
+  observable form
+- We cannot determine whether the author "truly" understands SD principles
+- We cannot assess how readers will actually receive this content
+- We cannot predict long-term effects on discourse
+
+We assess the content as it presents itself, not the soul behind it.
+
+
+GUIDING PRINCIPLES
+------------------
+
+1. STEELMAN FIRST: Before criticizing, ask "Is there a reasonable 
+   interpretation where this works?" Give benefit of the doubt.
+
+2. PROPORTIONATE STANDARDS: Judge content by what it's trying to be, 
+   not by standards for a different genre.
+
+3. FORM OVER SOULS: Assess observable qualities, not imagined intentions.
+
+4. ILLUMINATION OVER CONDEMNATION: The goal is to help people engage 
+   wisely with content, not to condemn creators.
+
+5. ACKNOWLEDGE LIMITS: Be clear about what we can and cannot assess.
+
+6. GOOD FAITH MATTERS: There is a profound difference between imperfect 
+   honest effort and deliberate manipulation. Both may have flaws, but 
+   they are not morally equivalent.
+
+
+VALUE WEIGHTS FOR OVERALL CALCULATION
+-------------------------------------
 
 Value           | Weight | Rationale
 ----------------|--------|------------------------------------------
 Awareness       | 1.0    | Baseline importance
-Honesty         | 1.2    | Slightly higher - foundational to trust
-Accuracy        | 1.2    | Slightly higher - essential for reliability
-Competence      | 1.0    | Baseline importance
-Compassion      | 1.1    | Slightly higher - core to wisdom
-Loving-kindness | 1.0    | Baseline importance
-Joyful-sharing  | 0.9    | Slightly lower - valuable but secondary
+Honesty         | 1.2    | Foundational to trust and discourse
+Accuracy        | 1.2    | Essential for informed decision-making
+Competence      | 1.0    | Baseline importance  
+Compassion      | 1.0    | Observable form only; reduced from 1.1
+Loving-kindness | 0.9    | Observable form only; harder to assess
+Joyful-sharing  | 0.8    | Valuable but secondary; hardest to assess
+
+Note: Weights reduced for values where we're assessing observable form 
+rather than inner state. This acknowledges our epistemic limits.
 
 
-============================
-"The goal is not to be right, but to become wise."
+======================================
+"The goal is not to judge, but to illuminate."
 
-"Pure Love is foundational reality - the Wisdom Agent helps us organize around it."
+"Public wisdom is about good form—supporting the conditions under which 
+wisdom can flourish, even when we cannot see into souls."
+
+"A system can select for wisdom even when individual actors are imperfect, 
+if the rules reward good form."

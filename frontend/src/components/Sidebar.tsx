@@ -14,7 +14,7 @@ import {
   Sun,
   Moon,
   History,
-  CheckCircle,
+  // CheckCircle,  // Unused while F/L/W is hidden
   Archive,
   DollarSign,
   AlertTriangle,
@@ -192,11 +192,13 @@ export function Sidebar({ className }: SidebarProps) {
       href: '/sessions',
       icon: History,
     },
-    {
-      name: 'Fact/Logic/Wisdom',
-      href: '/fact-checker',
-      icon: CheckCircle,
-    },
+   // F/L/W Checker - Hidden while feature is being improved
+    // Uncomment to restore:
+    // {
+    //   name: 'Fact/Logic/Wisdom',
+    //   href: '/fact-checker',
+    //   icon: CheckCircle,
+    // },
     {
       name: 'Knowledge Base',
       href: '/knowledge',

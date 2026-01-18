@@ -17,6 +17,16 @@ Modified: 2026-01-03
 - Added external philosophy file loading from data/philosophy/wisdom_evaluation_philosophy.txt
 - Philosophy can now be edited without touching code
 - Added reload_philosophy() function for future UI editing support
+
+Modified: 2026-01-15
+- Added sd_mini.txt loading for modular grounding
+- Philosophy now loaded in two parts: SD grounding + task-specific instructions
+- SD mini is loaded FIRST, then wisdom evaluation instructions
+
+Modified: 2026-01-17
+- Added genre detection for genre-appropriate evaluation standards
+- Op-eds now evaluated as opinion pieces, not strict journalism
+- Fixed: Advocacy is not manipulation; making a case is not dishonest
 """
 
 import json
@@ -39,10 +49,64 @@ logger = logging.getLogger(__name__)
 # ============================================================================
 
 # Cache for loaded philosophy content
+_SD_MINI_CONTENT: Optional[str] = None
+_WISDOM_EVAL_CONTENT: Optional[str] = None
 _PHILOSOPHY_CONTENT: Optional[str] = None
 
 
-def load_philosophy_content() -> str:
+def _find_philosophy_file(filename: str) -> Optional[Path]:
+    """
+    Find a philosophy file in the expected locations.
+    
+    Args:
+        filename: The name of the file to find (e.g., 'sd_mini.txt')
+        
+    Returns:
+        Path to the file if found, None otherwise
+    """
+    possible_paths = [
+        # From backend/services/ go up two levels to project root, then into data/philosophy/base/
+        Path(__file__).parent.parent.parent / "data" / "philosophy" / "base" / filename,
+        # Direct path from project root (with base/ subdirectory)
+        Path(f"data/philosophy/base/{filename}"),
+        # Docker container path (with base/ subdirectory)
+        Path(f"/app/data/philosophy/base/{filename}"),
+        # Fallback: try without base/ subdirectory (legacy locations)
+        Path(__file__).parent.parent.parent / "data" / "philosophy" / filename,
+        Path(f"data/philosophy/{filename}"),
+        Path(f"/app/data/philosophy/{filename}"),
+    ]
+    
+    for path in possible_paths:
+        if path.exists():
+            return path
+    return None
+
+
+def load_sd_mini_content() -> str:
+    """
+    Load the Something Deeperism mini-grounding from sd_mini.txt.
+    
+    This provides the philosophical foundation that should be loaded
+    BEFORE any task-specific instructions.
+    
+    File location: data/philosophy/sd_mini.txt
+    """
+    path = _find_philosophy_file("sd_mini.txt")
+    
+    if path:
+        try:
+            content = path.read_text(encoding='utf-8')
+            logger.info(f"Loaded SD mini-grounding from: {path}")
+            return content
+        except Exception as e:
+            logger.warning(f"Could not read {path}: {e}")
+    
+    logger.warning("sd_mini.txt not found, SD grounding will be minimal")
+    return ""
+
+
+def load_wisdom_eval_content() -> str:
     """
     Load philosophy content from the external text file.
     
@@ -51,27 +115,29 @@ def load_philosophy_content() -> str:
     
     File location: data/philosophy/wisdom_evaluation_philosophy.txt
     """
-    # Try multiple possible locations
-    possible_paths = [
-        # From backend/services/ go up two levels to project root, then into data/
-        Path(__file__).parent.parent.parent / "data" / "philosophy" / "wisdom_evaluation_philosophy.txt",
-        # Direct path from project root
-        Path("data/philosophy/wisdom_evaluation_philosophy.txt"),
-        # Docker container path
-        Path("/app/data/philosophy/wisdom_evaluation_philosophy.txt"),
-    ]
+    path = _find_philosophy_file("wisdom_evaluation_philosophy.txt")
     
-    for path in possible_paths:
-        if path.exists():
-            try:
-                content = path.read_text(encoding='utf-8')
-                logger.info(f"Loaded philosophy from: {path}")
-                return content
-            except Exception as e:
-                logger.warning(f"Could not read {path}: {e}")
+    if path:
+        try:
+            content = path.read_text(encoding='utf-8')
+            logger.info(f"Loaded wisdom evaluation philosophy from: {path}")
+            return content
+        except Exception as e:
+            logger.warning(f"Could not read {path}: {e}")
     
     logger.warning("Philosophy file not found, using embedded defaults")
     return _get_default_philosophy()
+
+
+# Keep the old function name for backwards compatibility
+def load_philosophy_content() -> str:
+    """
+    Load philosophy content from the external text file.
+    
+    DEPRECATED: Use load_wisdom_eval_content() instead.
+    Kept for backwards compatibility.
+    """
+    return load_wisdom_eval_content()
 
 
 def _get_default_philosophy() -> str:
@@ -122,11 +188,40 @@ THE THREE QUESTIONS:
 """
 
 
+def get_sd_mini_content() -> str:
+    """Get cached SD mini content, loading if necessary."""
+    global _SD_MINI_CONTENT
+    if _SD_MINI_CONTENT is None:
+        _SD_MINI_CONTENT = load_sd_mini_content()
+    return _SD_MINI_CONTENT
+
+
+def get_wisdom_eval_content() -> str:
+    """Get cached wisdom evaluation content, loading if necessary."""
+    global _WISDOM_EVAL_CONTENT
+    if _WISDOM_EVAL_CONTENT is None:
+        _WISDOM_EVAL_CONTENT = load_wisdom_eval_content()
+    return _WISDOM_EVAL_CONTENT
+
+
 def get_philosophy_content() -> str:
-    """Get cached philosophy content, loading if necessary."""
+    """
+    Get combined philosophy content: SD mini-grounding + wisdom evaluation instructions.
+    
+    This is the main function called by the system prompt generator.
+    Loads SD mini first (the grounding), then wisdom evaluation instructions.
+    """
     global _PHILOSOPHY_CONTENT
     if _PHILOSOPHY_CONTENT is None:
-        _PHILOSOPHY_CONTENT = load_philosophy_content()
+        sd_mini = get_sd_mini_content()
+        wisdom_eval = get_wisdom_eval_content()
+        
+        # Combine with clear separation if both exist
+        if sd_mini:
+            _PHILOSOPHY_CONTENT = f"{sd_mini}\n\n{'='*60}\n\n{wisdom_eval}"
+        else:
+            _PHILOSOPHY_CONTENT = wisdom_eval
+    
     return _PHILOSOPHY_CONTENT
 
 
@@ -140,7 +235,9 @@ def reload_philosophy() -> str:
     Returns:
         The newly loaded philosophy content
     """
-    global _PHILOSOPHY_CONTENT
+    global _SD_MINI_CONTENT, _WISDOM_EVAL_CONTENT, _PHILOSOPHY_CONTENT
+    _SD_MINI_CONTENT = None
+    _WISDOM_EVAL_CONTENT = None
     _PHILOSOPHY_CONTENT = None
     content = get_philosophy_content()
     logger.info(f"Philosophy reloaded ({len(content)} characters)")
@@ -148,20 +245,178 @@ def reload_philosophy() -> str:
 
 
 # ============================================================================
+# GENRE DETECTION
+# ============================================================================
+
+def detect_content_genre(content: str, title: str = "") -> str:
+    """
+    Detect the genre of content for genre-appropriate evaluation.
+    
+    This is CRITICAL for fair evaluation. An op-ed should not be judged
+    by the standards of a news report, and vice versa.
+    
+    Args:
+        content: The text content to analyze
+        title: Optional title for additional context
+        
+    Returns:
+        One of: 'opinion_editorial', 'journalism', 'academic', 'social_informal', 'unknown'
+    """
+    content_lower = content.lower()
+    title_lower = title.lower() if title else ""
+    combined = f"{title_lower} {content_lower[:2000]}"  # Check first 2000 chars
+    
+    # Opinion/Editorial indicators
+    opinion_signals = [
+        # Explicit labels
+        "opinion", "editorial", "op-ed", "oped", "commentary", "column",
+        "perspective", "viewpoint", "analysis",
+        # First-person advocacy
+        "i believe", "i think", "in my view", "it seems to me",
+        "we should", "we must", "we need to",
+        # Argumentative framing
+        "the real problem is", "what this means is", "the truth is",
+        "make no mistake", "let's be clear", "here's why",
+        # Value judgments
+        "shameful", "outrageous", "unacceptable", "dangerous",
+        "coercion", "shakedown", "corruption", "abuse of power",
+    ]
+    
+    # News/Journalism indicators  
+    journalism_signals = [
+        # Attribution patterns
+        "according to", "sources say", "officials said", "reported that",
+        "in a statement", "declined to comment", "did not respond",
+        # News structure
+        "breaking:", "update:", "developing:",
+        "who, what, when, where",
+        # Neutral framing
+        "on one hand", "critics say", "supporters argue",
+    ]
+    
+    # Academic indicators
+    academic_signals = [
+        "abstract", "methodology", "findings suggest", "the data shows",
+        "peer-reviewed", "citation", "et al.", "hypothesis",
+        "statistically significant", "p-value", "confidence interval",
+        "literature review", "theoretical framework",
+    ]
+    
+    # Social/Informal indicators
+    social_signals = [
+        "lol", "tbh", "imo", "imho", "thread:", "🧵",
+        "@", "#", "retweet", "share if you",
+    ]
+    
+    # Count signals
+    opinion_count = sum(1 for signal in opinion_signals if signal in combined)
+    journalism_count = sum(1 for signal in journalism_signals if signal in combined)
+    academic_count = sum(1 for signal in academic_signals if signal in combined)
+    social_count = sum(1 for signal in social_signals if signal in combined)
+    
+    # Determine genre based on strongest signals
+    max_count = max(opinion_count, journalism_count, academic_count, social_count)
+    
+    if max_count == 0:
+        return "unknown"
+    
+    if opinion_count == max_count and opinion_count >= 2:
+        return "opinion_editorial"
+    elif academic_count == max_count and academic_count >= 2:
+        return "academic"
+    elif social_count == max_count and social_count >= 2:
+        return "social_informal"
+    elif journalism_count == max_count and journalism_count >= 2:
+        return "journalism"
+    elif opinion_count >= 2:  # Default to opinion if signals present
+        return "opinion_editorial"
+    else:
+        return "unknown"
+
+
+def get_genre_guidance(genre: str) -> str:
+    """
+    Get genre-specific evaluation guidance.
+    
+    This ensures evaluators apply appropriate standards for each content type.
+    """
+    guidance = {
+        "opinion_editorial": """
+GENRE: OPINION/EDITORIAL
+This content is an OPINION PIECE. Apply these standards:
+- Primary job: Argue for a position with evidence and reasoning
+- IT IS APPROPRIATE TO: Advocate strongly, use persuasive language, express value judgments
+- NOT REQUIRED TO: Present opposing views equally, pretend neutrality, exhaustively caveat
+- REMEMBER: Advocacy ≠ manipulation. Making a case is not dishonest.
+- A WISE op-ed: Argues fairly, engages counterarguments where relevant, doesn't dehumanize opponents
+- Strong language about serious matters (e.g., "coercion," "shakedowns") is APPROPRIATE if supported by evidence
+- Score of 3 = adequate for this genre; reserve low scores for genuine problems
+""",
+        "journalism": """
+GENRE: NEWS JOURNALISM  
+This content is NEWS REPORTING. Apply these standards:
+- Primary job: Inform readers about what happened
+- IT IS APPROPRIATE TO: Report facts, quote sources, build cases from evidence
+- NOT REQUIRED TO: Exhaustively caveat every claim, present all alternatives equally
+- Circumstantial evidence IS legitimate in journalism
+- A WISE news article: Accurately informs, cites sources, distinguishes confirmed from alleged
+- Score of 3 = adequate for this genre
+""",
+        "academic": """
+GENRE: ACADEMIC/SCHOLARLY
+This content is ACADEMIC WORK. Apply these standards:
+- Primary job: Advance knowledge through rigorous inquiry
+- REQUIRED TO: Cite sources, acknowledge limitations, engage prior work
+- Held to HIGHER standards of methodology and hedging than other genres
+- A WISE academic paper: Sound methodology, appropriate hedging, honest about limitations
+""",
+        "social_informal": """
+GENRE: SOCIAL/INFORMAL
+This content is CASUAL/SOCIAL MEDIA. Apply these standards:
+- Primary job: Share, connect, communicate quickly
+- Space constraints are real; exhaustive sourcing is unrealistic
+- A WISE social post: Shares helpfully, doesn't spread clear misinformation, doesn't punch down
+- Be LENIENT on format while still assessing substance
+""",
+        "unknown": """
+GENRE: GENERAL CONTENT
+Genre could not be determined. Apply balanced standards:
+- Assess based on what the content appears to be trying to accomplish
+- Give benefit of the doubt on stylistic choices
+- Focus on substance over form
+"""
+    }
+    return guidance.get(genre, guidance["unknown"])
+
+
+# ============================================================================
 # SYSTEM PROMPT GENERATION
 # ============================================================================
 
-def get_wisdom_evaluation_system_prompt() -> str:
+def get_wisdom_evaluation_system_prompt(genre: str = "unknown") -> str:
     """
-    Generate the system prompt using loaded philosophy content.
+    Generate the system prompt using loaded philosophy content and genre guidance.
     
+    Args:
+        genre: The detected genre of the content being evaluated
+        
     This is called fresh each time to allow for hot-reloading of philosophy.
     """
     philosophy = get_philosophy_content()
+    genre_guidance = get_genre_guidance(genre)
     
     return f"""You are a philosophical evaluator using the Wisdom Agent framework.
 
 {philosophy}
+
+{genre_guidance}
+
+CRITICAL EVALUATION PRINCIPLES:
+1. Apply GENRE-APPROPRIATE standards - an op-ed is not a news report
+2. A score of 3 means "adequate for this content type" - not every piece needs 5s
+3. Strong advocacy with evidence is NOT the same as manipulation
+4. Assess what the content IS, not what you wish it were
+5. Reserve low scores (1-2) for genuine problems, not stylistic preferences
 
 Your task is to evaluate content against this framework, assessing both:
 1. The 7 Universal Values (quantitative scores with qualitative notes)
@@ -265,7 +520,8 @@ class WisdomEvaluationService:
         review_id: int,
         content: str,
         fact_check_summary: Optional[str] = None,
-        logic_summary: Optional[str] = None
+        logic_summary: Optional[str] = None,
+        title: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Evaluate content against the Wisdom Agent philosophy.
@@ -275,6 +531,7 @@ class WisdomEvaluationService:
             content: The text content to evaluate
             fact_check_summary: Summary of fact-check findings (optional)
             logic_summary: Summary of logic analysis (optional)
+            title: Optional title for better genre detection
             
         Returns:
             Dict containing wisdom evaluation results
@@ -286,6 +543,10 @@ class WisdomEvaluationService:
             return {"error": "Content too short for meaningful wisdom evaluation"}
         
         try:
+            # Detect content genre for appropriate evaluation standards
+            genre = detect_content_genre(content, title or "")
+            logger.info(f"Detected genre for review {review_id}: {genre}")
+            
             # Build context from earlier analyses
             fact_context = fact_check_summary or "No fact-check analysis available."
             logic_context = logic_summary or "No logic analysis available."
@@ -293,24 +554,27 @@ class WisdomEvaluationService:
             # Perform LLM evaluation
             llm = self.get_llm_service()
             
-            # Use dynamic system prompt (reads from external file)
+            # Use dynamic system prompt with genre-specific guidance
             response = llm.complete(
                 messages=[{"role": "user", "content": WISDOM_EVALUATION_USER_PROMPT.format(
                     content=self._truncate_content(content),
                     fact_check_summary=fact_context,
                     logic_summary=logic_context
                 )}],
-                system_prompt=get_wisdom_evaluation_system_prompt(),  # <-- CHANGED: Now uses function
+                system_prompt=get_wisdom_evaluation_system_prompt(genre=genre),
                 temperature=0.4,  # Slightly higher for more nuanced evaluation
             )
             
             # Parse response
             evaluation = self._parse_llm_response(response)
             
+            # Add genre to evaluation for transparency
+            evaluation["detected_genre"] = genre
+            
             # Save to database
             await self._save_evaluation(review_id, evaluation)
             
-            logger.info(f"Wisdom evaluation complete for review {review_id}")
+            logger.info(f"Wisdom evaluation complete for review {review_id} (genre: {genre})")
             return evaluation
             
         except Exception as e:
@@ -564,16 +828,23 @@ class WisdomEvaluationService:
         Returns None if using embedded defaults.
         Useful for the UI to show where the philosophy is coming from.
         """
-        possible_paths = [
-            Path(__file__).parent.parent.parent / "data" / "philosophy" / "wisdom_evaluation_philosophy.txt",
-            Path("data/philosophy/wisdom_evaluation_philosophy.txt"),
-            Path("/app/data/philosophy/wisdom_evaluation_philosophy.txt"),
-        ]
+        path = _find_philosophy_file("wisdom_evaluation_philosophy.txt")
+        return str(path) if path else None
+    
+    def get_philosophy_paths(self) -> Dict[str, Optional[str]]:
+        """
+        Get paths to all loaded philosophy files.
         
-        for path in possible_paths:
-            if path.exists():
-                return str(path)
-        return None
+        Returns dict with paths or None if using embedded defaults.
+        Useful for the UI to show where the philosophy is coming from.
+        """
+        sd_path = _find_philosophy_file("sd_mini.txt")
+        eval_path = _find_philosophy_file("wisdom_evaluation_philosophy.txt")
+        
+        return {
+            "sd_mini": str(sd_path) if sd_path else None,
+            "wisdom_evaluation": str(eval_path) if eval_path else None,
+        }
 
 
 # ============================================================================

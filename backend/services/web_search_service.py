@@ -10,6 +10,7 @@ Supports multiple backends with fallback:
 Author: Wisdom Agent Team
 Date: 2025-12-20
 Phase: 2, Day 7
+Updated: 2025-01-17 - Improved search_for_claim with key term extraction
 """
 
 import logging
@@ -17,11 +18,46 @@ import os
 import re
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Set
 
 import httpx
 
 logger = logging.getLogger(__name__)
+
+
+# ============================================================================
+# STOPWORDS FOR QUERY OPTIMIZATION
+# ============================================================================
+
+# Common words to filter out when extracting search terms
+STOPWORDS: Set[str] = {
+    # Articles
+    "a", "an", "the",
+    # Conjunctions
+    "and", "or", "but", "nor", "so", "yet", "for",
+    # Prepositions
+    "in", "on", "at", "to", "from", "by", "with", "about", "into",
+    "through", "during", "before", "after", "above", "below", "between",
+    "under", "over", "of", "as", "into", "onto", "upon",
+    # Pronouns
+    "i", "you", "he", "she", "it", "we", "they", "me", "him", "her",
+    "us", "them", "my", "your", "his", "its", "our", "their",
+    "this", "that", "these", "those", "who", "whom", "which", "what",
+    # Common verbs (when used as auxiliaries)
+    "is", "are", "was", "were", "be", "been", "being",
+    "have", "has", "had", "having", "do", "does", "did", "doing",
+    "will", "would", "could", "should", "may", "might", "must", "shall",
+    "can", "need", "dare", "ought", "used",
+    # Other common words
+    "each", "every", "both", "all", "any", "some", "no", "not",
+    "only", "own", "same", "than", "too", "very", "just", "also",
+    "now", "here", "there", "when", "where", "why", "how",
+    "if", "then", "else", "because", "although", "though", "while",
+    # Claim-specific filler words
+    "said", "says", "according", "claimed", "claims", "stated", "states",
+    "reported", "reports", "allegedly", "supposedly", "apparently",
+    "actually", "really", "basically", "essentially", "generally",
+}
 
 
 @dataclass
@@ -102,6 +138,7 @@ class DuckDuckGoBackend(SearchBackend):
         
         try:
             async with httpx.AsyncClient() as client:
+                print(f"DEBUG DuckDuckGo: POSTing query='{query}'")
                 response = await client.post(
                     self.BASE_URL,
                     data={"q": query, "b": ""},
@@ -113,11 +150,14 @@ class DuckDuckGoBackend(SearchBackend):
                     timeout=15.0,
                 )
                 response.raise_for_status()
+                print(f"DEBUG DuckDuckGo: response status={response.status_code}, len={len(response.text)}")
                 
                 # Parse HTML results
                 results = self._parse_html_results(response.text, num_results)
+                print(f"DEBUG DuckDuckGo: parsed {len(results)} results")
                 
         except Exception as e:
+            print(f"DEBUG DuckDuckGo: EXCEPTION: {e}")
             logger.exception(f"DuckDuckGo search failed: {e}")
         
         return results
@@ -354,10 +394,126 @@ class WebSearchService:
             return []
         
         logger.info(f"Searching with {backend.name}: {query[:50]}...")
+        print(f"DEBUG WebSearchService.search: backend={backend.name}, query='{query}'")
         results = await backend.search(query, num_results)
+        print(f"DEBUG WebSearchService.search: got {len(results)} results")
         logger.info(f"Found {len(results)} results")
         
         return results
+    
+    def _extract_search_terms(
+        self, 
+        claim: str, 
+        max_terms: int = 8
+    ) -> str:
+        """
+        Extract key search terms from a claim.
+        
+        Prioritizes:
+        1. Proper nouns (capitalized words)
+        2. Numbers and monetary amounts
+        3. Quoted phrases
+        4. Other significant words (not stopwords)
+        
+        Args:
+            claim: The claim text to extract terms from
+            max_terms: Maximum number of terms to include
+            
+        Returns:
+            A concise search query string
+        """
+        # Extract quoted phrases first (preserve these intact)
+        quoted_phrases = re.findall(r'"([^"]+)"', claim)
+        
+        # Remove quoted phrases from claim for further processing
+        remaining = re.sub(r'"[^"]+"', ' ', claim)
+        
+        # Extract monetary amounts (e.g., "$50 million", "tens of millions")
+        money_patterns = re.findall(
+            r'\$[\d,]+(?:\.\d+)?(?:\s*(?:million|billion|thousand))?|'
+            r'(?:tens|hundreds|thousands|millions|billions)\s+of\s+(?:dollars|millions|billions)',
+            remaining, 
+            re.IGNORECASE
+        )
+        
+        # Extract years (4-digit numbers that look like years)
+        years = re.findall(r'\b(19\d{2}|20\d{2})\b', remaining)
+        
+        # Extract percentages
+        percentages = re.findall(r'\d+(?:\.\d+)?%', remaining)
+        
+        # Tokenize remaining text
+        words = re.findall(r'\b[A-Za-z0-9]+\b', remaining)
+        
+        # Separate proper nouns (capitalized) and regular words
+        proper_nouns = []
+        regular_words = []
+        
+        for word in words:
+            # Skip very short words
+            if len(word) < 2:
+                continue
+            
+            word_lower = word.lower()
+            
+            # Skip stopwords
+            if word_lower in STOPWORDS:
+                continue
+            
+            # Check if it's a proper noun (capitalized and not at sentence start)
+            # We'll be generous and include any capitalized word
+            if word[0].isupper() and not word.isupper():
+                proper_nouns.append(word)
+            elif word.isupper() and len(word) > 1:
+                # Acronyms like "ABC", "FBI", "CEO"
+                proper_nouns.append(word)
+            else:
+                regular_words.append(word_lower)
+        
+        # Build the query, prioritizing in order:
+        # 1. Quoted phrases
+        # 2. Proper nouns (names, organizations, places)
+        # 3. Numbers (money, years, percentages)
+        # 4. Other significant words
+        
+        terms = []
+        
+        # Add quoted phrases (limit to first 2)
+        for phrase in quoted_phrases[:2]:
+            if len(phrase.split()) <= 4:  # Only short phrases
+                terms.append(f'"{phrase}"')
+        
+        # Add proper nouns (deduplicated)
+        seen_proper = set()
+        for noun in proper_nouns:
+            noun_lower = noun.lower()
+            if noun_lower not in seen_proper:
+                seen_proper.add(noun_lower)
+                terms.append(noun)
+        
+        # Add monetary amounts
+        terms.extend(money_patterns[:2])
+        
+        # Add years and percentages
+        terms.extend(years[:2])
+        terms.extend(percentages[:2])
+        
+        # Add regular words if we need more terms
+        seen_regular = set()
+        for word in regular_words:
+            if word not in seen_regular and word not in seen_proper:
+                seen_regular.add(word)
+                terms.append(word)
+        
+        # Limit total terms
+        terms = terms[:max_terms]
+        
+        # Join into query string
+        query = ' '.join(terms)
+        
+        logger.debug(f"Extracted search terms: '{query}' from claim: '{claim[:50]}...'")
+        
+        return query
     
     async def search_for_claim(
         self,
@@ -367,7 +523,8 @@ class WebSearchService:
         """
         Search for evidence related to a claim.
         
-        Constructs a search query optimized for fact-checking.
+        Uses intelligent term extraction to construct effective search queries.
+        Tries multiple search strategies with fallback.
         
         Args:
             claim: The claim to find evidence for
@@ -376,14 +533,45 @@ class WebSearchService:
         Returns:
             List of SearchResult objects
         """
-        # Construct fact-check optimized query
-        query = f'"{claim}"'  # Exact phrase search
+        all_results = []
         
-        results = await self.search(query, num_results)
+        # Strategy 1: Extract key terms (most likely to succeed)
+        key_terms = self._extract_search_terms(claim)
+        print(f"DEBUG search_for_claim: claim='{claim[:60]}...'")
+        print(f"DEBUG search_for_claim: extracted key_terms='{key_terms}'")
         
-        # If no results, try without quotes
-        if not results:
+        if key_terms:
+            logger.info(f"Search strategy 1 - Key terms: {key_terms}")
+            results = await self.search(key_terms, num_results)
+            print(f"DEBUG search_for_claim: strategy 1 got {len(results)} results")
+            if results:
+                return results
+        
+        # Strategy 2: Try with fewer terms if first attempt failed
+        if key_terms and len(key_terms.split()) > 4:
+            shorter_terms = ' '.join(key_terms.split()[:4])
+            print(f"DEBUG search_for_claim: strategy 2 shorter_terms='{shorter_terms}'")
+            logger.info(f"Search strategy 2 - Shorter terms: {shorter_terms}")
+            results = await self.search(shorter_terms, num_results)
+            print(f"DEBUG search_for_claim: strategy 2 got {len(results)} results")
+            if results:
+                return results
+        
+        # Strategy 3: If claim is short enough, try it directly (no quotes)
+        if len(claim.split()) <= 10:
+            print(f"DEBUG search_for_claim: strategy 3 direct claim")
+            logger.info(f"Search strategy 3 - Direct claim (short)")
             results = await self.search(claim, num_results)
+            print(f"DEBUG search_for_claim: strategy 3 got {len(results)} results")
+            if results:
+                return results
+        
+        # Strategy 4: Last resort - try first part of claim
+        first_part = ' '.join(claim.split()[:8])
+        print(f"DEBUG search_for_claim: strategy 4 first_part='{first_part}'")
+        logger.info(f"Search strategy 4 - First part: {first_part}")
+        results = await self.search(first_part, num_results)
+        print(f"DEBUG search_for_claim: strategy 4 got {len(results)} results")
         
         return results
     
@@ -402,9 +590,13 @@ class WebSearchService:
         Returns:
             List of SearchResult objects from fact-checking sites
         """
-        # Add fact-check keywords to query
-        query = f'fact check {claim}'
+        # Extract key terms instead of using full claim
+        key_terms = self._extract_search_terms(claim, max_terms=5)
         
+        # Add fact-check keywords to query
+        query = f'fact check {key_terms}'
+        
+        logger.info(f"Searching for fact checks: {query}")
         results = await self.search(query, num_results * 2)
         
         # Filter to known fact-checking domains
