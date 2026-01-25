@@ -228,20 +228,26 @@ function ResourceCard({
     <>
       <div className="bg-white rounded-lg border border-slate-200 hover:border-slate-300 transition-colors">
         <div className="p-4 flex items-center gap-4">
-          {/* Icon */}
-          <div className="p-2 bg-slate-100 rounded-lg">
-            <Icon className="w-5 h-5 text-slate-600" />
-          </div>
-
-          {/* Info */}
-          <div className="flex-1 min-w-0">
-            <h3 className="font-medium text-slate-900 truncate">{resource.name}</h3>
-            <div className="flex items-center gap-3 mt-1 text-sm text-slate-500">
-              <span>{formatTokens(resource.token_count)} tokens</span>
-              <span>·</span>
-              <span className="capitalize">{resource.resource_type.replace('_', ' ')}</span>
+          {/* Clickable area - Icon and Info */}
+          <Link
+            href={`/knowledge/resource/${resource.id}`}
+            className="flex items-center gap-4 flex-1 min-w-0"
+          >
+            {/* Icon */}
+            <div className="p-2 bg-slate-100 rounded-lg">
+              <Icon className="w-5 h-5 text-slate-600" />
             </div>
-          </div>
+
+            {/* Info */}
+            <div className="flex-1 min-w-0">
+              <h3 className="font-medium text-slate-900 truncate hover:text-indigo-600 transition-colors">{resource.name}</h3>
+              <div className="flex items-center gap-3 mt-1 text-sm text-slate-500">
+                <span>{formatTokens(resource.token_count)} tokens</span>
+                <span>·</span>
+                <span className="capitalize">{resource.resource_type.replace('_', ' ')}</span>
+              </div>
+            </div>
+          </Link>
 
           {/* Index Status */}
           <div className="flex items-center gap-2">

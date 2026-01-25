@@ -84,6 +84,20 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         print(f"⚠ Knowledge Base tables creation failed: {e}")
     
+    # Create Argument Builder tables
+    try:
+        from backend.database.argument_tables import create_argument_tables
+        
+        with engine.connect() as conn:
+            use_postgres = 'postgres' in str(engine.url).lower()
+            create_argument_tables(conn, use_postgres=use_postgres)
+            conn.commit()
+        print("✓ Argument Builder tables verified/created")
+    except ImportError:
+        print("⚠ Argument Builder tables module not found (optional)")
+    except Exception as e:
+        print(f"⚠ Argument Builder tables creation failed: {e}")
+    
     # ============================================
     # AUTO-INITIALIZE SERVICES (Week 3 Day 3)
     # ============================================
@@ -231,6 +245,24 @@ async def lifespan(app: FastAPI):
         print("⚠ Knowledge Base Service not found (optional)")
     except Exception as e:
         print(f"⚠ Knowledge Base Service initialization failed: {e}")
+    
+    # 10. Initialize Parsing Service (Argument Builder)
+    try:
+        from backend.services.parsing_service import get_parsing_service
+        parsing_service = get_parsing_service()
+        
+        if parsing_service:
+            parsing_service.initialize(
+                db_connection=db,
+                llm_router=llm_router,
+                spending_service=spending,
+                knowledge_service=kb_service
+            )
+            print("✓ Parsing Service initialized")
+    except ImportError:
+        print("⚠ Parsing Service not found (optional)")
+    except Exception as e:
+        print(f"⚠ Parsing Service initialization failed: {e}")
     
     print("-" * 40)
     print("Service initialization complete")
@@ -411,6 +443,14 @@ try:
     print("✓ Knowledge Base router registered")
 except ImportError as e:
     print(f"⚠ Knowledge Base router not available: {e}")
+
+# Argument Builder router
+try:
+    from backend.routers.arguments import router as arguments_router
+    app.include_router(arguments_router, prefix="/api", tags=["Argument Builder"])
+    print("✓ Argument Builder router registered")
+except ImportError as e:
+    print(f"⚠ Argument Builder router not available: {e}")
 
 
 if __name__ == "__main__":

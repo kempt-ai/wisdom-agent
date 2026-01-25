@@ -395,6 +395,50 @@ async def get_resource(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/resources/{resource_id}/content")
+async def get_resource_content(
+    resource_id: int,
+    user_id: int = Depends(get_user_id)
+):
+    """
+    Get the raw content of a resource.
+    
+    Returns the original text content stored when the resource was created.
+    Use this to display the full document or feed it to analysis tools.
+    """
+    try:
+        service = get_knowledge_service()
+        # Verify user has access
+        resource = await service.get_resource(resource_id, user_id)
+        
+        # Fetch content from database
+        result = service.db.execute(
+            text("SELECT original_content FROM knowledge_resources WHERE id = :id"),
+            {"id": resource_id}
+        )
+        row = result.fetchone()
+        
+        if not row or not row[0]:
+            return {
+                "resource_id": resource_id,
+                "name": resource.name,
+                "content": None,
+                "message": "No content stored for this resource"
+            }
+        
+        return {
+            "resource_id": resource_id,
+            "name": resource.name,
+            "content": row[0],
+            "token_count": resource.token_count
+        }
+    except ResourceNotFoundError:
+        raise HTTPException(status_code=404, detail="Resource not found")
+    except Exception as e:
+        logger.error(f"Failed to get resource content: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.delete("/resources/{resource_id}", status_code=204)
 async def delete_resource(
     resource_id: int,

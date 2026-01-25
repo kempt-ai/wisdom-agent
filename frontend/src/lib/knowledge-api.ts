@@ -1,9 +1,14 @@
 /**
  * Knowledge Base API client for Wisdom Agent
- * Handles collections, resources, and search functionality
+ * Handles collections, resources, search, indexing, and argument parsing
+ * 
+ * FIXED: January 19, 2026 - Matched to actual backend endpoints in knowledge.py
  */
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+
+// Knowledge endpoints are under /api/knowledge
+const KB_PREFIX = '/api/knowledge';
 
 // Generic fetch wrapper with error handling
 async function fetchAPI<T>(
@@ -37,6 +42,9 @@ export type CollectionType = 'research' | 'fiction' | 'learning' | 'general';
 export type ResourceType = 'document' | 'fiction_book' | 'nonfiction_book' | 'article' | 'learning_module';
 
 export type ResourceStatus = 'pending' | 'indexing' | 'indexed' | 'failed';
+export type IndexStatus = 'pending' | 'indexing' | 'completed' | 'failed';
+
+export type IndexLevel = 'none' | 'light' | 'standard' | 'full';
 
 export interface CollectionSummary {
   id: number;
@@ -44,6 +52,7 @@ export interface CollectionSummary {
   description?: string;
   collection_type: CollectionType;
   resource_count: number;
+  total_tokens: number;
   created_at: string;
   updated_at: string;
 }
@@ -53,6 +62,8 @@ export interface Collection {
   name: string;
   description?: string;
   collection_type: CollectionType;
+  resource_count: number;
+  total_tokens: number;
   created_at: string;
   updated_at: string;
   resources?: Resource[];
@@ -63,15 +74,30 @@ export interface Resource {
   collection_id: number;
   name: string;
   resource_type: ResourceType;
-  source_type: 'url' | 'text' | 'file';
+  source_type: 'url' | 'text' | 'file' | 'upload';
   source_url?: string;
   content_preview?: string;
+  content?: string;
   status: ResourceStatus;
+  index_status: IndexStatus;
+  index_level: IndexLevel;
   error_message?: string;
-  token_count?: number;
+  token_count: number;
   indexing_cost?: number;
   created_at: string;
+  updated_at: string;
   indexed_at?: string;
+}
+
+// Summary version for list views
+export interface ResourceSummary {
+  id: number;
+  name: string;
+  resource_type: ResourceType;
+  token_count: number;
+  index_level: IndexLevel;
+  index_status: IndexStatus;
+  updated_at: string;
 }
 
 export interface KnowledgeStats {
@@ -110,6 +136,7 @@ export interface CreateResourceRequest {
   source_type: 'url' | 'text' | 'file';
   source_url?: string;
   source_content?: string;
+  content?: string;
   model_override?: string;
   provider_override?: string;
 }
@@ -120,18 +147,56 @@ export interface CostEstimate {
   model_id: string;
   model_name: string;
   provider: string;
-  estimates_by_model?: Array<{
+}
+
+export interface IndexEstimate {
+  resource_id: number;
+  index_level: IndexLevel;
+  token_count: number;
+  estimated_cost: number;
+  budget_remaining: number;
+  can_afford: boolean;
+  warning_message?: string;
+  // Backend also returns these:
+  estimated_tokens?: number;
+  model_id?: string;
+  alternatives?: Array<{
     model_id: string;
-    model_name: string;
-    provider: string;
     estimated_cost: number;
-    tier: string;
-    description?: string;
   }>;
-  recommended?: {
-    model_id: string;
-    provider: string;
+}
+
+export interface UrlPreview {
+  success: boolean;
+  url: string;
+  title?: string;
+  author?: string;
+  publish_date?: string;
+  description?: string;
+  content_preview?: string;
+  word_count?: number;
+  content_type?: string;
+  token_estimate?: number;
+  indexing_cost_estimates?: {
+    light?: { estimated_tokens: number; estimated_cost: number };
+    standard?: { estimated_tokens: number; estimated_cost: number };
+    full?: { estimated_tokens: number; estimated_cost: number };
   };
+  error_message?: string;
+}
+
+export interface AddResourceFromUrlRequest {
+  url: string;
+  name?: string;
+  description?: string;
+  resource_type?: ResourceType | string;
+}
+
+export interface AddResourceTextRequest {
+  name: string;
+  content: string;
+  description?: string;
+  resource_type?: ResourceType;
 }
 
 // ============================================
@@ -143,9 +208,6 @@ export const knowledgeApi = {
   // Collections
   // ----------------------------------------
   
-  /**
-   * List all collections, optionally filtered by type
-   */
   async listCollections(
     search?: string,
     collectionType?: CollectionType
@@ -155,46 +217,32 @@ export const knowledgeApi = {
     if (collectionType) params.append('collection_type', collectionType);
     
     const queryString = params.toString();
-    const endpoint = `/api/knowledge/collections${queryString ? `?${queryString}` : ''}`;
+    const endpoint = `${KB_PREFIX}/collections${queryString ? `?${queryString}` : ''}`;
     
-    const response = await fetchAPI<{ collections: CollectionSummary[] } | CollectionSummary[]>(endpoint);
-    
-    // Handle both response formats
+    const response = await fetchAPI<CollectionSummary[] | { collections: CollectionSummary[] }>(endpoint);
     return Array.isArray(response) ? response : response.collections;
   },
 
-  /**
-   * Get a single collection with its resources
-   */
   async getCollection(id: number): Promise<Collection> {
-    return fetchAPI(`/api/knowledge/collections/${id}`);
+    return fetchAPI(`${KB_PREFIX}/collections/${id}`);
   },
 
-  /**
-   * Create a new collection
-   */
   async createCollection(data: CreateCollectionRequest): Promise<Collection> {
-    return fetchAPI('/api/knowledge/collections', {
+    return fetchAPI(`${KB_PREFIX}/collections`, {
       method: 'POST',
       body: JSON.stringify(data),
     });
   },
 
-  /**
-   * Update a collection
-   */
   async updateCollection(id: number, data: Partial<CreateCollectionRequest>): Promise<Collection> {
-    return fetchAPI(`/api/knowledge/collections/${id}`, {
+    return fetchAPI(`${KB_PREFIX}/collections/${id}`, {
       method: 'PUT',
       body: JSON.stringify(data),
     });
   },
 
-  /**
-   * Delete a collection and all its resources
-   */
   async deleteCollection(id: number): Promise<void> {
-    await fetchAPI(`/api/knowledge/collections/${id}`, {
+    await fetchAPI(`${KB_PREFIX}/collections/${id}`, {
       method: 'DELETE',
     });
   },
@@ -203,48 +251,148 @@ export const knowledgeApi = {
   // Resources
   // ----------------------------------------
 
-  /**
-   * List resources in a collection
-   */
-  async listResources(collectionId: number): Promise<Resource[]> {
-    const response = await fetchAPI<{ resources: Resource[] } | Resource[]>(
-      `/api/knowledge/collections/${collectionId}/resources`
+  async listResources(collectionId: number): Promise<ResourceSummary[]> {
+    const response = await fetchAPI<ResourceSummary[] | Resource[]>(
+      `${KB_PREFIX}/collections/${collectionId}/resources`
     );
-    return Array.isArray(response) ? response : response.resources;
+    
+    // Map to ResourceSummary if needed
+    return response.map((r: any) => ({
+      id: r.id,
+      name: r.name,
+      resource_type: r.resource_type,
+      token_count: r.token_count || 0,
+      index_level: r.index_level || 'none',
+      index_status: r.index_status || 'pending',
+      updated_at: r.updated_at || r.created_at,
+    }));
   },
 
-  /**
-   * Get a single resource
-   */
   async getResource(resourceId: number): Promise<Resource> {
-    return fetchAPI(`/api/knowledge/resources/${resourceId}`);
+    return fetchAPI(`${KB_PREFIX}/resources/${resourceId}`);
   },
 
-  /**
-   * Add a resource to a collection
-   */
   async createResource(collectionId: number, data: CreateResourceRequest): Promise<Resource> {
-    return fetchAPI(`/api/knowledge/collections/${collectionId}/resources`, {
+    return fetchAPI(`${KB_PREFIX}/collections/${collectionId}/resources`, {
       method: 'POST',
       body: JSON.stringify(data),
     });
   },
 
   /**
-   * Delete a resource
+   * Preview a URL before adding it as a resource
+   * Endpoint: POST /knowledge/preview-url
    */
-  async deleteResource(resourceId: number): Promise<void> {
-    await fetchAPI(`/api/knowledge/resources/${resourceId}`, {
-      method: 'DELETE',
+  async previewUrl(url: string): Promise<UrlPreview> {
+    return fetchAPI(`${KB_PREFIX}/preview-url`, {
+      method: 'POST',
+      body: JSON.stringify({ url }),
     });
   },
 
   /**
-   * Retry indexing a failed resource
+   * Add a resource from URL
+   * Endpoint: POST /knowledge/collections/{id}/from-url
    */
-  async reindexResource(resourceId: number): Promise<Resource> {
-    return fetchAPI(`/api/knowledge/resources/${resourceId}/reindex`, {
+  async addResourceFromUrl(
+    collectionId: number, 
+    data: AddResourceFromUrlRequest
+  ): Promise<{ resource: Resource; extraction: any }> {
+    return fetchAPI(`${KB_PREFIX}/collections/${collectionId}/from-url`, {
       method: 'POST',
+      body: JSON.stringify({
+        url: data.url,
+        name: data.name,
+        description: data.description,
+        resource_type: data.resource_type || 'article',
+      }),
+    });
+  },
+
+  /**
+   * Add a resource from pasted text
+   * Endpoint: POST /knowledge/collections/{id}/resources
+   */
+  async addResourceText(
+    collectionId: number, 
+    data: AddResourceTextRequest
+  ): Promise<Resource> {
+    return fetchAPI(`${KB_PREFIX}/collections/${collectionId}/resources`, {
+      method: 'POST',
+      body: JSON.stringify({
+        name: data.name,
+        content: data.content,
+        description: data.description,
+        source_type: 'text',
+        resource_type: data.resource_type || 'document',
+      }),
+    });
+  },
+
+  /**
+   * Upload a file as a resource
+   * Endpoint: POST /knowledge/collections/{id}/upload
+   */
+  async uploadResource(collectionId: number, file: File, name?: string): Promise<Resource> {
+    const formData = new FormData();
+    formData.append('file', file);
+    if (name) formData.append('name', name);
+    
+    const url = `${API_BASE}${KB_PREFIX}/collections/${collectionId}/upload`;
+    
+    const response = await fetch(url, {
+      method: 'POST',
+      body: formData,
+      // Don't set Content-Type header - browser will set it with boundary
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: 'Upload failed' }));
+      throw new Error(error.detail || `Upload error: ${response.status}`);
+    }
+
+    return response.json();
+  },
+
+  async deleteResource(resourceId: number): Promise<void> {
+    await fetchAPI(`${KB_PREFIX}/resources/${resourceId}`, {
+      method: 'DELETE',
+    });
+  },
+
+  async reindexResource(resourceId: number): Promise<Resource> {
+    return fetchAPI(`${KB_PREFIX}/resources/${resourceId}/refresh`, {
+      method: 'POST',
+    });
+  },
+
+  // ----------------------------------------
+  // Indexing
+  // ----------------------------------------
+
+  /**
+   * Get cost estimate for indexing a resource
+   * Endpoint: GET /knowledge/resources/{id}/index-estimate?level=X
+   */
+  async getIndexEstimate(resourceId: number, level: IndexLevel): Promise<IndexEstimate> {
+    return fetchAPI(`${KB_PREFIX}/resources/${resourceId}/index-estimate?level=${level}`);
+  },
+
+  /**
+   * Index a resource at the specified level
+   * Endpoint: POST /knowledge/resources/{id}/index
+   */
+  async indexResource(
+    resourceId: number, 
+    level: IndexLevel, 
+    confirmed: boolean = false
+  ): Promise<any> {
+    return fetchAPI(`${KB_PREFIX}/resources/${resourceId}/index`, {
+      method: 'POST',
+      body: JSON.stringify({ 
+        index_level: level, 
+        confirmed,
+      }),
     });
   },
 
@@ -252,9 +400,6 @@ export const knowledgeApi = {
   // Search
   // ----------------------------------------
 
-  /**
-   * Search across all collections or specific ones
-   */
   async search(
     query: string,
     options?: {
@@ -276,29 +421,23 @@ export const knowledgeApi = {
     if (options?.limit) params.append('limit', String(options.limit));
     if (options?.offset) params.append('offset', String(options.offset));
     
-    return fetchAPI(`/api/knowledge/search?${params.toString()}`);
+    return fetchAPI(`${KB_PREFIX}/search?${params.toString()}`);
   },
 
   // ----------------------------------------
-  // Stats & Cost Estimation
+  // Stats
   // ----------------------------------------
 
-  /**
-   * Get knowledge base statistics
-   */
   async getStats(): Promise<KnowledgeStats> {
-    return fetchAPI('/api/knowledge/stats');
+    return fetchAPI(`${KB_PREFIX}/stats`);
   },
 
-  /**
-   * Estimate indexing cost for content
-   */
   async estimateIndexingCost(data: {
     source_type: 'url' | 'text';
     source_url?: string;
     source_content?: string;
   }): Promise<CostEstimate> {
-    return fetchAPI('/api/knowledge/estimate', {
+    return fetchAPI(`${KB_PREFIX}/estimate`, {
       method: 'POST',
       body: JSON.stringify(data),
     });
@@ -315,8 +454,14 @@ export const {
   listResources,
   getResource,
   createResource,
+  previewUrl,
+  addResourceFromUrl,
+  addResourceText,
+  uploadResource,
   deleteResource,
   reindexResource,
+  getIndexEstimate,
+  indexResource,
   search,
   getStats,
   estimateIndexingCost,

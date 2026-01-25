@@ -224,6 +224,7 @@ class KnowledgeBaseService:
             INSERT INTO knowledge_collections 
             (user_id, project_id, name, description, collection_type, visibility, tags, settings, created_at, updated_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            RETURNING id
         """
         values = (
             user_id,
@@ -239,8 +240,9 @@ class KnowledgeBaseService:
         )
         
         cursor = self._exec(query, values)
+        result = cursor.fetchone()
+        collection_id = result[0] if result else None
         self.db.commit()
-        collection_id = cursor.lastrowid
         
         logger.info(f"Created collection {collection_id} for user {user_id}")
         
@@ -411,6 +413,7 @@ class KnowledgeBaseService:
              source_url, original_content, content_hash, token_count, 
              visibility, metadata, created_at, updated_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            RETURNING id
         """
         values = (
             collection_id,
@@ -430,8 +433,9 @@ class KnowledgeBaseService:
         )
         
         cursor = self._exec(query, values)
+        result = cursor.fetchone()
+        resource_id = result[0] if result else None
         self.db.commit()
-        resource_id = cursor.lastrowid
         
         logger.info(f"Added resource {resource_id} to collection {collection_id}")
         
@@ -720,7 +724,7 @@ class KnowledgeBaseService:
             model_info = self.llm_router.get_model_info(model_id)
         else:
             task_type = f"indexing_{index_level.value}"
-            model_id = self.llm_router.recommend_model_for_task(task_type)
+            model_id = "claude-sonnet-4-20250514"
             model_info = self.llm_router.get_model_info(model_id)
         
         # Calculate estimated tokens
@@ -769,7 +773,7 @@ class KnowledgeBaseService:
         
         # Get all models and calculate costs
         for provider in self.llm_router.get_available_providers():
-            for model in self.llm_router.get_provider_models(provider):
+            for model in self.llm_router.get_models(provider):
                 if model['id'] == exclude_model:
                     continue
                 
@@ -1004,7 +1008,7 @@ class KnowledgeBaseService:
         response = await self.llm_router.complete(
             prompt,
             model=model_id,
-            system="You are a careful analyst extracting structured information from content."
+            system_prompt="You are a careful analyst extracting structured information from content."
         )
         
         # Parse response
@@ -1255,7 +1259,7 @@ class KnowledgeBaseService:
         
         # Use specified model or get recommendation
         if not model_id:
-            model_id = self.llm_router.recommend_model_for_task("character_extraction")
+            model_id = "claude-sonnet-4-20250514"
         
         prompt = f"""Analyze this fiction text and extract all significant characters.
 
@@ -1282,7 +1286,7 @@ Text to analyze:
         response = await self.llm_router.complete(
             prompt,
             model=model_id,
-            system="You are an expert literary analyst specializing in character study."
+            system_prompt="You are an expert literary analyst specializing in character study."
         )
         
         # Parse response
@@ -1337,7 +1341,8 @@ Text to analyze:
             """INSERT INTO character_profiles
                (resource_id, name, aliases, description, role, voice_profile, 
                 relationships, sample_quotes, source_work, created_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+               RETURNING id""",
             (
                 resource_id,
                 data.get('name', 'Unknown'),
@@ -1351,8 +1356,9 @@ Text to analyze:
                 datetime.utcnow().isoformat()
             )
         )
+        result = cursor.fetchone()
         self.db.commit()
-        return cursor.lastrowid
+        return result[0] if result else None
     
     # ========================================================================
     # AUTHOR VOICE
@@ -1387,7 +1393,7 @@ Text to analyze:
             raise KnowledgeBaseError("No valid resources found for voice analysis")
         
         if not model_id:
-            model_id = self.llm_router.recommend_model_for_task("voice_analysis")
+            model_id = "claude-sonnet-4-20250514"
         
         prompt = f"""Analyze the writing style of {data.author_name} based on these samples.
 
@@ -1409,7 +1415,7 @@ Samples:
         response = await self.llm_router.complete(
             prompt,
             model=model_id,
-            system="You are a literary analyst specializing in author voice and style."
+            system_prompt="You are a literary analyst specializing in author voice and style."
         )
         
         # Parse response
@@ -1439,7 +1445,8 @@ Samples:
         cursor = self._exec(
             """INSERT INTO author_voices
                (user_id, author_name, style_profile, sample_passages, source_works, resource_ids, created_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+               VALUES (?, ?, ?, ?, ?, ?, ?)
+               RETURNING id""",
             (
                 user_id,
                 data.author_name,
@@ -1450,6 +1457,8 @@ Samples:
                 datetime.utcnow().isoformat()
             )
         )
+        result = cursor.fetchone()
+        author_voice_id = result[0] if result else None
         self.db.commit()
         
         # Record cost
@@ -1465,7 +1474,7 @@ Samples:
             )
         
         return AuthorVoice(
-            id=cursor.lastrowid,
+            id=author_voice_id,
             user_id=user_id,
             author_name=data.author_name,
             style_profile=style_profile,

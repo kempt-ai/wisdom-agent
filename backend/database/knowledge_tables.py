@@ -557,15 +557,24 @@ def create_knowledge_tables(connection, use_postgres: bool = True):
     statements = [s.strip() for s in sql.split(';') if s.strip()]
     
     for statement in statements:
+        # Remove SQL comments (lines starting with --)
+        lines = statement.split('\n')
+        non_comment_lines = [l for l in lines if not l.strip().startswith('--')]
+        cleaned_statement = '\n'.join(non_comment_lines).strip()
+        
+        # Skip if nothing left after removing comments
+        if not cleaned_statement:
+            continue
+            
         try:
-            connection.execute(text(statement))
+            connection.execute(text(cleaned_statement))
+            connection.commit()  # Commit each statement individually
         except Exception as e:
-            # Don't print warnings for "already exists" type errors
+            connection.rollback()  # Rollback failed statement to reset transaction
             error_str = str(e).lower()
             if 'already exists' not in error_str and 'duplicate' not in error_str:
-                print(f"Warning: Could not execute: {statement[:50]}... Error: {e}")
+                print(f"Warning: Could not execute: {cleaned_statement[:50]}... Error: {e}")
     
-    # Note: commit is handled by the caller (main.py does conn.commit())
     print(f"Knowledge Base tables created/verified ({'PostgreSQL' if use_postgres else 'SQLite'})")
 
 
