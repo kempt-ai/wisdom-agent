@@ -502,6 +502,41 @@ class LLMRouter:
         
         return None
     
+    def estimate_cost(
+        self,
+        model_id: str,
+        input_tokens: int,
+        output_tokens: int,
+        provider: Optional[str] = None
+    ) -> float:
+        """
+        Estimate cost for a given model and token counts.
+        
+        Args:
+            model_id: The model identifier
+            input_tokens: Estimated input tokens
+            output_tokens: Estimated output tokens
+            provider: Provider name (will search all if not specified)
+            
+        Returns:
+            Estimated cost in dollars
+        """
+        model_info = self.get_model_info(model_id, provider)
+        
+        if not model_info:
+            # Fallback to default pricing if model not found
+            # Use Claude Sonnet pricing as reasonable default
+            input_cost_per_1m = 3.00
+            output_cost_per_1m = 15.00
+        else:
+            input_cost_per_1m = model_info.get('input_cost_per_1m', 0)
+            output_cost_per_1m = model_info.get('output_cost_per_1m', 0)
+        
+        input_cost = (input_tokens / 1_000_000) * input_cost_per_1m
+        output_cost = (output_tokens / 1_000_000) * output_cost_per_1m
+        
+        return input_cost + output_cost
+    
     def get_current_model(self, provider: Optional[str] = None) -> Dict:
         """
         Get the currently selected model for a provider.

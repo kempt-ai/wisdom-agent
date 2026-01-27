@@ -240,6 +240,56 @@ async def get_resource_outline(
         
         return result
         
+    except Exception as e:
+        logger.error(f"Failed to get outline: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/resource/{resource_id}/parses")
+async def list_resource_parses(
+    resource_id: int,
+    user_id: int = Depends(get_user_id)
+):
+    """
+    List all parses for a KB resource.
+    
+    Returns all parse versions (light/standard/full) with their metadata.
+    Useful for showing available parses and letting user choose which to view.
+    """
+    try:
+        service = get_parsing_service()
+        parses = await service.list_parses_for_resource(resource_id, user_id)
+        return {"resource_id": resource_id, "parses": parses}
+        
+    except Exception as e:
+        logger.error(f"Failed to list parses: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/parsed/{parsed_resource_id}/outline", response_model=ParsedResourceOutline)
+async def get_outline_by_parsed_id(
+    parsed_resource_id: int,
+    user_id: int = Depends(get_user_id)
+):
+    """
+    Get outline for a specific parsed resource by its ID.
+    
+    Unlike /resource/{id}/outline which returns the most recent parse,
+    this returns the outline for the exact parse specified.
+    Use this when viewing a specific parse from the parses list.
+    """
+    try:
+        service = get_parsing_service()
+        result = await service.get_outline_by_parsed_id(parsed_resource_id, user_id)
+        
+        if not result:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Parsed resource {parsed_resource_id} not found"
+            )
+        
+        return result
+        
     except HTTPException:
         raise
     except Exception as e:
@@ -546,5 +596,53 @@ async def arguments_health():
     except Exception as e:
         return {
             "status": "unhealthy",
+            "error": str(e)
+        }
+
+
+# ============================================================================
+# MODEL SELECTION
+# ============================================================================
+
+@router.get("/models")
+async def get_available_models():
+    """
+    Get available LLM providers and models for parsing.
+    
+    Returns providers with their models, costs, and capabilities.
+    Use this to populate model selection dropdowns.
+    """
+    try:
+        service = get_parsing_service()
+        
+        if not service.llm_router:
+            return {
+                "providers": [],
+                "error": "LLM router not configured"
+            }
+        
+        router = service.llm_router
+        available_providers = router.get_available_providers()
+        
+        providers = []
+        for provider_name in available_providers:
+            models = router.get_models(provider_name)
+            current = router.get_current_model(provider_name)
+            
+            providers.append({
+                "name": provider_name,
+                "default_model": current.get('model_id'),
+                "models": models
+            })
+        
+        return {
+            "active_provider": router.active_provider,
+            "providers": providers
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to get models: {e}")
+        return {
+            "providers": [],
             "error": str(e)
         }

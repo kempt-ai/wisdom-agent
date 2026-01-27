@@ -234,6 +234,7 @@ class ParsedResource(ParsedResourceBase):
     parsed_at: datetime
     parser_model: Optional[str] = None
     parser_version: Optional[str] = None
+    parse_level: str = "standard"  # ADDED: light, standard, or full
     parsing_cost_tokens: int = 0
     parsing_cost_dollars: float = 0.0
     
@@ -549,3 +550,7 @@ class ParsedResourceOutline(BaseModel):
     
     parsed_at: datetime
     sources_cited: List[str] = []
+    
+    # ADDED: Model info (for display in UI)
+    parser_model: Optional[str] = None
+    parse_level: Optional[str] = None

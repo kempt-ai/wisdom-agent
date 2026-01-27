@@ -72,7 +72,39 @@ You classify claims as:
 You are thorough but precise. Extract the actual argument structure, not a summary.
 Return valid JSON only, no markdown formatting."""
 
-PARSING_USER_PROMPT = """Analyze this document and extract its argument structure.
+# Level-specific parsing prompts with different depth/detail
+PARSING_USER_PROMPTS = {
+    "light": """Analyze this document and extract a quick overview of its argument structure.
+
+Document:
+---
+{content}
+---
+
+Extract and return as JSON:
+{{
+  "main_thesis": "The central claim or position (1 sentence)",
+  "summary": "A 1-2 sentence summary",
+  "arguments": [
+    {{
+      "title": "Brief title",
+      "claim": "The main claim (1 sentence)",
+      "claim_type": "factual|interpretive|prescriptive",
+      "evidence": [],
+      "sub_arguments": []
+    }}
+  ],
+  "sources_cited": []
+}}
+
+Important:
+- Extract only 2-4 TOP-LEVEL arguments maximum
+- Keep claims to single sentences
+- NO sub-arguments or detailed evidence
+- NO sources list (leave empty)
+- This is a quick scan, not a deep analysis""",
+
+    "standard": """Analyze this document and extract its argument structure.
 
 Document:
 ---
@@ -109,7 +141,53 @@ Important:
 - Preserve the hierarchical structure of arguments and sub-arguments
 - Include specific evidence (quotes, statistics, examples) when present
 - Classify each claim accurately by type
-- If no clear thesis exists, describe the document's main focus"""
+- If no clear thesis exists, describe the document's main focus""",
+
+    "full": """Analyze this document and extract its COMPLETE argument structure in full detail.
+
+Document:
+---
+{content}
+---
+
+Extract and return as JSON:
+{{
+  "main_thesis": "The central claim or position of the document (1-2 sentences)",
+  "summary": "A 2-3 sentence summary of the document's overall argument",
+  "arguments": [
+    {{
+      "title": "Brief title for this argument",
+      "claim": "The main claim this argument makes",
+      "claim_type": "factual|interpretive|prescriptive",
+      "context": "Context about where/why this argument appears and how it connects to others",
+      "evidence": [
+        {{
+          "type": "statistic|quote|citation|example|data|testimony",
+          "content": "The actual evidence - include specific numbers, full quotes, detailed examples",
+          "source": "Full source attribution with author/publication/date if available"
+        }}
+      ],
+      "sub_arguments": [
+        // Nested arguments to FULL DEPTH - follow every argument chain
+      ]
+    }}
+  ],
+  "sources_cited": ["ALL URLs and references cited in the document"]
+}}
+
+Important:
+- Be EXHAUSTIVE - capture EVERY argument, not just major ones
+- Follow sub-arguments to their FULL DEPTH (unlimited nesting)
+- Include ALL evidence with full detail (complete quotes, exact statistics)
+- Preserve exact source attributions and URLs
+- Capture nuances, caveats, and qualifications
+- Note connections between different arguments
+- If no clear thesis exists, describe the document's main focus
+- This is a COMPREHENSIVE extraction - miss nothing significant"""
+}
+
+# Backwards compatibility alias
+PARSING_USER_PROMPT = PARSING_USER_PROMPTS["standard"]
 
 
 # ============================================================================
@@ -328,17 +406,22 @@ class ParsingService:
             # Get model
             model_id = request.model_id or self._get_default_model()
             
-            # Call LLM
-            logger.info(f"Parsing resource {request.resource_id} with {model_id}")
+            # Select prompt and max_tokens based on parse level
+            parse_level = request.parse_level or "standard"
+            max_tokens_by_level = {"light": 2000, "standard": 8000, "full": 12000}
+            max_tokens = max_tokens_by_level.get(parse_level, 8000)
             
-            prompt = PARSING_USER_PROMPT.format(content=content[:100000])  # Limit content size
+            # Call LLM
+            logger.info(f"Parsing resource {request.resource_id} with {model_id} at {parse_level} level")
+            
+            prompt = PARSING_USER_PROMPTS.get(parse_level, PARSING_USER_PROMPTS["standard"]).format(content=content[:100000])  # Limit content size
             
             # Use complete_with_cost to get both response and cost info
             response_text, cost_info = self.llm_router.complete_with_cost(
                 messages=[{"role": "user", "content": prompt}],
                 system_prompt=PARSING_SYSTEM_PROMPT,
                 model=model_id,
-                max_tokens=8000,
+                max_tokens=max_tokens,
                 temperature=0.1  # Low temp for structured output
             )
             
@@ -703,7 +786,104 @@ class ParsingService:
             }
         )
         
+        
         return node, claim_count, evidence_count, verified_count
+    
+    # ========================================================================
+    # MULTI-PARSE SUPPORT
+    # ========================================================================
+    
+    async def list_parses_for_resource(
+        self,
+        resource_id: int,
+        user_id: int
+    ) -> List[Dict]:
+        """
+        List all parses for a resource with their metadata.
+        
+        Returns list of dicts with id, parse_level, parser_model, parsed_at, claim_count.
+        Used by the UI to show all available parses for a resource.
+        """
+        # Verify resource belongs to user
+        resource = await self._get_resource(resource_id, user_id)
+        if not resource:
+            return []
+        
+        cursor = self._exec(
+            """SELECT pr.id, pr.parse_level, pr.parser_model, pr.parsed_at,
+                      pr.main_thesis, pr.parsing_cost_dollars,
+                      (SELECT COUNT(*) FROM argument_claims WHERE parsed_resource_id = pr.id) as claim_count
+               FROM parsed_resources pr
+               WHERE pr.resource_id = :resource_id
+               ORDER BY pr.parsed_at DESC""",
+            {"resource_id": resource_id}
+        )
+        
+        parses = []
+        for row in cursor.fetchall():
+            parses.append({
+                "id": row[0],
+                "parse_level": row[1] or "standard",
+                "parser_model": row[2],
+                "parsed_at": row[3].isoformat() if row[3] else None,
+                "main_thesis": row[4],
+                "cost_dollars": row[5] or 0,
+                "claim_count": row[6] or 0
+            })
+        
+        return parses
+    
+    async def get_outline_by_parsed_id(
+        self,
+        parsed_resource_id: int,
+        user_id: int
+    ) -> Optional[ParsedResourceOutline]:
+        """
+        Get outline for a specific parsed resource by its ID.
+        
+        Unlike get_resource_outline which returns the most recent parse,
+        this returns the outline for the exact parse specified.
+        """
+        # Get the parsed resource
+        parsed = await self.get_parsed_resource(parsed_resource_id, include_claims=True)
+        if not parsed:
+            return None
+        
+        # Verify user owns the underlying resource
+        resource = await self._get_resource(parsed.resource_id, user_id)
+        if not resource:
+            return None
+        
+        resource_name = resource.get('name', 'Unknown')
+        
+        # Build outline tree (same logic as get_resource_outline)
+        outline = []
+        total_claims = 0
+        total_evidence = 0
+        verified_claims = 0
+        
+        for claim in parsed.claims:
+            node, claims, evidence, verified = self._claim_to_outline_node(claim)
+            outline.append(node)
+            total_claims += claims
+            total_evidence += evidence
+            verified_claims += verified
+        
+        return ParsedResourceOutline(
+            parsed_resource_id=parsed.id,
+            resource_id=parsed.resource_id,
+            resource_name=resource_name,
+            main_thesis=parsed.main_thesis,
+            summary=parsed.summary,
+            outline=outline,
+            total_claims=total_claims,
+            total_evidence=total_evidence,
+            verified_claims=verified_claims,
+            parsed_at=parsed.parsed_at,
+            sources_cited=parsed.sources_cited or [],
+            parser_model=parsed.parser_model,
+            parse_level=getattr(parsed, 'parse_level', 'standard')
+        )
     
     # ========================================================================
     # INTERNAL HELPERS

@@ -282,7 +282,7 @@ class ContentExtractor:
                 include_comments=False,
                 include_tables=True,
                 no_fallback=False,
-                favor_precision=True,
+                favor_recall=True,
                 url=url
             )
             
