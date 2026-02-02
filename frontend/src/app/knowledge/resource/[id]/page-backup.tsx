@@ -6,7 +6,7 @@ import Link from 'next/link';
 import {
   ArrowLeft, FileText, BookOpen, Clock, CheckCircle,
   AlertCircle, RefreshCw, Zap, ExternalLink, Copy, Check,
-  ListTree, Loader2, DollarSign, ChevronDown
+  ListTree, Loader2, DollarSign
 } from 'lucide-react';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
@@ -340,85 +340,124 @@ export default function ResourceDetailPage() {
         </div>
       </header>
 
-<main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Metadata Card - Compact */}
+      <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Metadata Card */}
         <div className="bg-white rounded-lg border border-slate-200 p-4 mb-6">
-          <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
-            <Link 
-              href={`/knowledge/${resource.collection_id}`}
-              className="text-indigo-600 hover:underline"
-            >
-              ← Back to collection
-            </Link>
-            <span className="text-slate-400">|</span>
-            <span className="text-slate-600 capitalize">{resource.resource_type.replace('_', ' ')}</span>
-            <span className="text-slate-400">|</span>
-            <span className="text-slate-600">{resource.token_count.toLocaleString()} tokens</span>
-            {resource.source_url && (
-              <>
-                <span className="text-slate-400">|</span>
-                <a 
-                  href={resource.source_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-1 text-indigo-600 hover:underline"
-                >
-                  Source <ExternalLink className="w-3 h-3" />
-                </a>
-              </>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+            <div>
+              <span className="text-slate-500">Collection</span>
+              <Link 
+                href={`/knowledge/${resource.collection_id}`}
+                className="block text-indigo-600 hover:underline truncate"
+              >
+                View collection →
+              </Link>
+            </div>
+            <div>
+              <span className="text-slate-500">Type</span>
+              <p className="text-slate-900 capitalize">{resource.resource_type.replace('_', ' ')}</p>
+            </div>
+            <div>
+              <span className="text-slate-500">Index Level</span>
+              <p className="text-slate-900 capitalize">{resource.index_level || 'None'}</p>
+            </div>
+            <div>
+              <span className="text-slate-500">Created</span>
+              <p className="text-slate-900">{new Date(resource.created_at).toLocaleDateString()}</p>
+            </div>
+          </div>
+
+          {resource.source_url && (
+            <div className="mt-4 pt-4 border-t border-slate-100">
+              <span className="text-sm text-slate-500">Source URL</span>
+              <a 
+                href={resource.source_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1 text-indigo-600 hover:underline text-sm"
+              >
+                {resource.source_url}
+                <ExternalLink className="w-3 h-3" />
+              </a>
+            </div>
+          )}
+
+          {resource.description && (
+            <div className="mt-4 pt-4 border-t border-slate-100">
+              <span className="text-sm text-slate-500">Description</span>
+              <p className="text-slate-700">{resource.description}</p>
+            </div>
+          )}
+        </div>
+
+        {/* Content Section */}
+        <div className="bg-white rounded-lg border border-slate-200">
+          <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between">
+            <h2 className="font-medium text-slate-900">Content</h2>
+            {content?.token_count && (
+              <span className="text-sm text-slate-500">
+                {content.token_count.toLocaleString()} tokens
+              </span>
+            )}
+          </div>
+          
+          <div className="p-4">
+            {content?.content ? (
+              <div className="prose prose-slate max-w-none">
+                <pre className="whitespace-pre-wrap font-sans text-sm text-slate-700 bg-slate-50 p-4 rounded-lg overflow-x-auto">
+                  {content.content}
+                </pre>
+              </div>
+            ) : (
+              <div className="text-center py-8 text-slate-500">
+                <FileText className="w-12 h-12 mx-auto mb-3 text-slate-300" />
+                <p>{content?.message || 'No content available'}</p>
+              </div>
             )}
           </div>
         </div>
 
-        {/* Existing Parses - PROMINENT */}
-        {parses.length > 0 && (
-          <div className="bg-white rounded-lg border border-slate-200 p-4 mb-6">
-            <h3 className="font-medium text-slate-900 mb-3 flex items-center gap-2">
-              <ListTree className="w-5 h-5 text-indigo-600" />
-              Existing Parses
-            </h3>
-            <div className="space-y-2">
-              {parses.map((parse) => (
-                <Link
-                  key={parse.id}
-                  href={`/arguments/outline/${parse.id}`}
-                  className="flex items-center justify-between p-3 bg-slate-50 rounded-lg hover:bg-indigo-50 hover:border-indigo-200 border border-transparent transition-colors"
-                >
-                  <div className="flex items-center gap-3">
-                    <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                      parse.parse_level === 'full' ? 'bg-purple-100 text-purple-700' :
-                      parse.parse_level === 'light' ? 'bg-green-100 text-green-700' :
-                      'bg-blue-100 text-blue-700'
-                    }`}>
-                      {parse.parse_level}
-                    </span>
-                    <span className="text-sm font-medium text-slate-900">
-                      {parse.claim_count} claims
-                    </span>
-                    <span className="text-sm text-slate-500">
-                      {parse.parser_model}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <span className="text-xs text-slate-400">
-                      {new Date(parse.parsed_at).toLocaleDateString()}
-                    </span>
-                    <span className="text-indigo-600 text-sm font-medium">
-                      View →
-                    </span>
-                  </div>
-                </Link>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Create New Parse */}
-        <div className="bg-white rounded-lg border border-slate-200 p-4 mb-6">
+        {/* Argument Parsing Section */}
+        <div className="mt-6 bg-white rounded-lg border border-slate-200 p-4">
           <h3 className="font-medium text-slate-900 mb-3 flex items-center gap-2">
-            <Zap className="w-5 h-5 text-indigo-600" />
-            {parses.length > 0 ? 'Create New Parse' : 'Parse This Resource'}
+            <ListTree className="w-5 h-5 text-indigo-600" />
+            Argument Parsing
           </h3>
+          
+          {/* Existing Parses */}
+          {parses.length > 0 && (
+            <div className="mb-4">
+              <p className="text-sm text-slate-600 mb-2">Existing parses:</p>
+              <div className="space-y-2">
+                {parses.map((parse) => (
+                  <Link
+                    key={parse.id}
+                    href={`/arguments/outline/${parse.id}`}
+                    className="flex items-center justify-between p-3 bg-slate-50 rounded-lg hover:bg-slate-100 transition-colors"
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className={`px-2 py-0.5 rounded text-xs font-medium ${
+                        parse.parse_level === 'full' ? 'bg-purple-100 text-purple-700' :
+                        parse.parse_level === 'light' ? 'bg-green-100 text-green-700' :
+                        'bg-blue-100 text-blue-700'
+                      }`}>
+                        {parse.parse_level}
+                      </span>
+                      <span className="text-sm text-slate-700">
+                        {parse.claim_count} claims
+                      </span>
+                      <span className="text-xs text-slate-400">
+                        {parse.parser_model.split('-').slice(0, 2).join('-')}
+                      </span>
+                    </div>
+                    <div className="text-xs text-slate-400">
+                      {new Date(parse.parsed_at).toLocaleDateString()}
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
           
           {/* Parse Controls */}
           <div className="flex flex-wrap items-center gap-3">
@@ -439,6 +478,7 @@ export default function ResourceDetailPage() {
               onChange={(e) => {
                 const newProvider = e.target.value;
                 setSelectedProvider(newProvider);
+                // Set default model for new provider
                 const provider = providers.find(p => p.name === newProvider);
                 if (provider) {
                   setSelectedModel(provider.default_model);
@@ -483,7 +523,7 @@ export default function ResourceDetailPage() {
               ) : (
                 <>
                   <Zap className="w-4 h-4" />
-                  Parse
+                  Parse Arguments
                 </>
               )}
             </button>
@@ -505,6 +545,7 @@ export default function ResourceDetailPage() {
             </div>
           )}
           
+          {/* Parse Error/Status */}
           {parseError && (
             <p className="mt-2 text-sm text-amber-600">{parseError}</p>
           )}
@@ -513,42 +554,6 @@ export default function ResourceDetailPage() {
             <p className="mt-2 text-sm text-slate-500">
               No content available to parse. Try refreshing the resource.
             </p>
-          )}
-        </div>
-
-        {/* Content Section - Collapsible */}
-        <div className="bg-white rounded-lg border border-slate-200">
-          <button
-            onClick={() => setShowContent(!showContent)}
-            className="w-full px-4 py-3 flex items-center justify-between hover:bg-slate-50 transition-colors"
-          >
-            <h2 className="font-medium text-slate-900 flex items-center gap-2">
-              <FileText className="w-5 h-5 text-slate-400" />
-              Full Content
-              {content?.token_count && (
-                <span className="text-sm font-normal text-slate-500">
-                  ({content.token_count.toLocaleString()} tokens)
-                </span>
-              )}
-            </h2>
-            <ChevronDown className={`w-5 h-5 text-slate-400 transition-transform ${showContent ? 'rotate-180' : ''}`} />
-          </button>
-          
-          {showContent && (
-            <div className="p-4 border-t border-slate-200">
-              {content?.content ? (
-                <div className="prose prose-slate max-w-none">
-                  <pre className="whitespace-pre-wrap font-sans text-sm text-slate-700 bg-slate-50 p-4 rounded-lg overflow-x-auto max-h-[600px] overflow-y-auto">
-                    {content.content}
-                  </pre>
-                </div>
-              ) : (
-                <div className="text-center py-8 text-slate-500">
-                  <FileText className="w-12 h-12 mx-auto mb-3 text-slate-300" />
-                  <p>{content?.message || 'No content available'}</p>
-                </div>
-              )}
-            </div>
           )}
         </div>
       </main>

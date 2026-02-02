@@ -374,7 +374,7 @@ class ParsingService:
         try:
             # Check if already parsed
             if not request.force_reparse:
-                existing = await self._get_existing_parse(request.resource_id, request.parse_level)
+                existing = await self._get_existing_parse(request.resource_id, request.parse_level, request.model_id)
                 if existing:
                     return ParseResult(
                         success=True,
@@ -955,14 +955,20 @@ class ParsingService:
         )
         return cursor.fetchone() is not None
     
-    async def _get_existing_parse(self, resource_id: int, parse_level: str = "standard") -> Optional[Dict]:
-        """Get existing parse for resource"""
-        cursor = self._exec(
-            """SELECT id, main_thesis, summary FROM parsed_resources
-               WHERE resource_id = :resource_id AND parse_level = :parse_level ORDER BY parsed_at DESC LIMIT 1""",
-            {"resource_id": resource_id,
-                "parse_level": parse_level}
-        )
+    async def _get_existing_parse(self, resource_id: int, parse_level: str = "standard", model_id: str = None) -> Optional[Dict]:
+        """Get existing parse for resource (optionally filtered by model)"""
+        if model_id:
+            cursor = self._exec(
+                """SELECT id, main_thesis, summary FROM parsed_resources
+                WHERE resource_id = :resource_id AND parse_level = :parse_level AND parser_model = :model_id ORDER BY parsed_at DESC LIMIT 1""",
+                {"resource_id": resource_id, "parse_level": parse_level, "model_id": model_id}
+            )
+        else:
+            cursor = self._exec(
+                """SELECT id, main_thesis, summary FROM parsed_resources
+                WHERE resource_id = :resource_id AND parse_level = :parse_level ORDER BY parsed_at DESC LIMIT 1""",
+                {"resource_id": resource_id, "parse_level": parse_level}
+            )   
         row = cursor.fetchone()
         if row:
             return {'id': row[0], 'main_thesis': row[1], 'summary': row[2]}
