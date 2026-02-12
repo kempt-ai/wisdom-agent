@@ -102,6 +102,7 @@ async def parse_resource(
 async def estimate_parsing(
     resource_id: int,
     model_id: Optional[str] = Query(None, description="Model to use for parsing"),
+    parse_level: str = Query("standard", description="Parse level: light, standard, or full"),
     user_id: int = Depends(get_user_id)
 ):
     """
@@ -114,7 +115,7 @@ async def estimate_parsing(
     """
     try:
         service = get_parsing_service()
-        return await service.estimate_parsing(resource_id, user_id, model_id)
+        return await service.estimate_parsing(resource_id, user_id, model_id, parse_level)
         
     except ResourceNotFoundError:
         raise HTTPException(status_code=404, detail="Resource not found")

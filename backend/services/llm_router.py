@@ -8,6 +8,7 @@ Updated: December 26, 2025 - Added granular model selection with cost tracking
 """
 
 import json
+import time
 from enum import Enum
 from typing import Dict, List, Optional, Any, Tuple
 
@@ -78,6 +79,7 @@ PROVIDER_MODELS = {
                 'input_cost_per_1m': 3.00,
                 'output_cost_per_1m': 15.00,
                 'context_window': 200000,
+                'max_output_tokens': 8192,
                 'best_for': ['Complex analysis', 'Writing', 'Code generation'],
             },
             {
@@ -88,6 +90,7 @@ PROVIDER_MODELS = {
                 'input_cost_per_1m': 3.00,
                 'output_cost_per_1m': 15.00,
                 'context_window': 200000,
+                'max_output_tokens': 8192,
                 'best_for': ['General use', 'Analysis', 'Creative writing'],
             },
             {
@@ -98,6 +101,7 @@ PROVIDER_MODELS = {
                 'input_cost_per_1m': 15.00,
                 'output_cost_per_1m': 75.00,
                 'context_window': 200000,
+                'max_output_tokens': 4096,
                 'best_for': ['Deep analysis', 'Philosophy', 'Nuanced tasks'],
             },
         ],
@@ -113,6 +117,7 @@ PROVIDER_MODELS = {
                 'input_cost_per_1m': 0.15,
                 'output_cost_per_1m': 0.60,
                 'context_window': 128000,
+                'max_output_tokens': 16384,
                 'best_for': ['Quick tasks', 'Simple queries'],
             },
             {
@@ -123,6 +128,7 @@ PROVIDER_MODELS = {
                 'input_cost_per_1m': 2.50,
                 'output_cost_per_1m': 10.00,
                 'context_window': 128000,
+                'max_output_tokens': 16384,
                 'best_for': ['Complex reasoning', 'Vision tasks', 'Code'],
             },
             {
@@ -133,6 +139,7 @@ PROVIDER_MODELS = {
                 'input_cost_per_1m': 10.00,
                 'output_cost_per_1m': 30.00,
                 'context_window': 128000,
+                'max_output_tokens': 4096,
                 'best_for': ['Complex tasks', 'Long context'],
             },
             {
@@ -143,6 +150,7 @@ PROVIDER_MODELS = {
                 'input_cost_per_1m': 15.00,
                 'output_cost_per_1m': 60.00,
                 'context_window': 128000,
+                'max_output_tokens': 32768,
                 'best_for': ['Math', 'Science', 'Complex reasoning'],
             },
         ],
@@ -158,6 +166,7 @@ PROVIDER_MODELS = {
                 'input_cost_per_1m': 0.075,
                 'output_cost_per_1m': 0.30,
                 'context_window': 1000000,
+                'max_output_tokens': 8192,
                 'best_for': ['Bulk processing', 'Speed-critical', 'Long documents'],
             },
             {
@@ -168,6 +177,7 @@ PROVIDER_MODELS = {
                 'input_cost_per_1m': 0.0375,
                 'output_cost_per_1m': 0.15,
                 'context_window': 1000000,
+                'max_output_tokens': 8192,
                 'best_for': ['High volume', 'Simple tasks'],
             },
             {
@@ -178,6 +188,7 @@ PROVIDER_MODELS = {
                 'input_cost_per_1m': 1.25,
                 'output_cost_per_1m': 5.00,
                 'context_window': 2000000,
+                'max_output_tokens': 8192,
                 'best_for': ['Very long documents', 'Multi-turn analysis'],
             },
             {
@@ -188,6 +199,7 @@ PROVIDER_MODELS = {
                 'input_cost_per_1m': 0.10,
                 'output_cost_per_1m': 0.40,
                 'context_window': 1000000,
+                'max_output_tokens': 8192,
                 'best_for': ['Testing new capabilities'],
             },
         ],
@@ -320,6 +332,12 @@ class LLMRouter:
         self.provider_config = self._load_config()
         self.active_provider = self.provider_config.get('active_provider', 'anthropic')
         self.clients: Dict[str, Any] = {}
+        
+        # Dynamic model discovery cache
+        # Structure: {provider: {'models': [...], 'fetched_at': timestamp}}
+        self._model_cache: Dict[str, Dict] = {}
+        self._cache_ttl = 3600  # Cache models for 1 hour
+        
         self._initialize_clients()
     
     def _load_config(self) -> Dict:
@@ -446,6 +464,248 @@ class LLMRouter:
             print("⚠ Google Generative AI library not installed")
     
     # ========================================================================
+    # DYNAMIC MODEL DISCOVERY
+    # ========================================================================
+    
+    def _fetch_nebius_models(self) -> List[Dict]:
+        """
+        Query Nebius API for available models dynamically.
+        
+        Returns:
+            List of model dicts with id, name, and provider fields
+        """
+        if 'nebius' not in self.clients:
+            return []
+        
+        try:
+            client = self.clients['nebius']
+            response = client.models.list()
+            
+            models = []
+            for model in response.data:
+                # Extract basic info from API response
+                models.append({
+                    'id': model.id,
+                    'name': model.id.split('/')[-1],  # Use last part as display name
+                    'provider': 'nebius',
+                    'tier': 'standard',  # Default tier
+                    'description': f'Nebius model: {model.id}',
+                    # Pricing will be merged from hardcoded config if available
+                })
+            
+            print(f"✓ Fetched {len(models)} models from Nebius API")
+            return models
+            
+        except Exception as e:
+            print(f"⚠ Failed to fetch Nebius models: {e}")
+            return []
+    
+    def _fetch_openai_models(self) -> List[Dict]:
+        """
+        Query OpenAI API for available models dynamically.
+        
+        Returns:
+            List of model dicts with id, name, and provider fields
+        """
+        if 'openai' not in self.clients:
+            return []
+        
+        try:
+            client = self.clients['openai']
+            response = client.models.list()
+            
+            # Filter for chat models only
+            models = []
+            for model in response.data:
+                model_id = model.id
+                # Only include GPT models suitable for chat
+                if any(prefix in model_id for prefix in ['gpt-4', 'gpt-3.5', 'o1']):
+                    models.append({
+                        'id': model_id,
+                        'name': model_id,
+                        'provider': 'openai',
+                        'tier': 'standard',
+                        'description': f'OpenAI model: {model_id}',
+                    })
+            
+            print(f"✓ Fetched {len(models)} chat models from OpenAI API")
+            return models
+            
+        except Exception as e:
+            print(f"⚠ Failed to fetch OpenAI models: {e}")
+            return []
+    
+    def _fetch_anthropic_models(self) -> List[Dict]:
+        """
+        Anthropic doesn't have a models.list() endpoint yet.
+        Return empty list to use hardcoded definitions.
+        
+        Returns:
+            Empty list (use hardcoded models for Anthropic)
+        """
+        # Anthropic API doesn't provide a list endpoint as of Jan 2025
+        # We'll rely on our hardcoded list which is kept up to date
+        return []
+    
+    def _fetch_gemini_models(self) -> List[Dict]:
+        """
+        Query Google Gemini API for available models dynamically.
+        
+        Returns:
+            List of model dicts with id, name, and provider fields
+        """
+        if 'gemini' not in self.clients:
+            return []
+        
+        try:
+            genai_client = self.clients['gemini']
+            
+            models = []
+            for model in genai_client.list_models():
+                # Only include generative models
+                if 'generateContent' in model.supported_generation_methods:
+                    model_dict = {
+                        'id': model.name.replace('models/', ''),  # Remove 'models/' prefix
+                        'name': model.display_name or model.name,
+                        'provider': 'gemini',
+                        'tier': 'standard',
+                        'description': model.description or f'Gemini model: {model.name}',
+                    }
+                    
+                    # Capture max_output_tokens if available
+                    if hasattr(model, 'output_token_limit'):
+                        model_dict['max_output_tokens'] = model.output_token_limit
+                    
+                    models.append(model_dict)
+            
+            print(f"✓ Fetched {len(models)} models from Gemini API")
+            return models
+            
+        except Exception as e:
+            print(f"⚠ Failed to fetch Gemini models: {e}")
+            return []
+    
+    def _fetch_local_models(self) -> List[Dict]:
+        """
+        Query Ollama for available local models.
+        
+        Returns:
+            List of model dicts with id, name, and provider fields
+        """
+        if 'local' not in self.clients:
+            return []
+        
+        try:
+            ollama_client = self.clients['local']
+            response = ollama_client.list()
+            
+            models = []
+            for model in response.get('models', []):
+                model_name = model.get('name', '').split(':')[0]  # Remove tag
+                models.append({
+                    'id': model_name,
+                    'name': model_name,
+                    'provider': 'local',
+                    'tier': 'free',
+                    'description': f'Local Ollama model: {model_name}',
+                    'input_cost_per_1m': 0.0,
+                    'output_cost_per_1m': 0.0,
+                })
+            
+            print(f"✓ Fetched {len(models)} models from Ollama")
+            return models
+            
+        except Exception as e:
+            print(f"⚠ Failed to fetch Ollama models: {e}")
+            return []
+    
+    def _is_cache_valid(self, provider: str) -> bool:
+        """Check if cached models for a provider are still valid."""
+        if provider not in self._model_cache:
+            return False
+        
+        cache_entry = self._model_cache[provider]
+        age = time.time() - cache_entry.get('fetched_at', 0)
+        return age < self._cache_ttl
+    
+    def _merge_dynamic_with_pricing(
+        self, 
+        dynamic_models: List[Dict], 
+        provider: str
+    ) -> List[Dict]:
+        """
+        Merge dynamically fetched models with pricing from hardcoded config.
+        
+        Args:
+            dynamic_models: Models fetched from provider API
+            provider: Provider name
+            
+        Returns:
+            Merged model list with pricing info where available
+        """
+        if provider not in PROVIDER_MODELS:
+            return dynamic_models
+        
+        # Create lookup dict of hardcoded models by ID
+        hardcoded_lookup = {
+            m['id']: m for m in PROVIDER_MODELS[provider]['models']
+        }
+        
+        merged = []
+        for dynamic_model in dynamic_models:
+            model_id = dynamic_model['id']
+            
+            # If we have hardcoded pricing/info for this model, merge it
+            if model_id in hardcoded_lookup:
+                # Hardcoded info takes precedence for pricing and metadata
+                merged.append({
+                    **dynamic_model,  # Start with dynamic (confirms it exists)
+                    **hardcoded_lookup[model_id],  # Override with our curated info
+                })
+            else:
+                # New model we don't have pricing for - use dynamic info
+                merged.append(dynamic_model)
+        
+        return merged
+    
+    def refresh_models(self, provider: Optional[str] = None):
+        """
+        Force refresh of model list from provider API.
+        
+        Args:
+            provider: Specific provider to refresh, or None for all
+        """
+        providers_to_refresh = [provider] if provider else self.clients.keys()
+        
+        for p in providers_to_refresh:
+            if p not in self.clients:
+                continue
+            
+            # Fetch based on provider
+            fetch_methods = {
+                'nebius': self._fetch_nebius_models,
+                'openai': self._fetch_openai_models,
+                'anthropic': self._fetch_anthropic_models,
+                'gemini': self._fetch_gemini_models,
+                'local': self._fetch_local_models,
+            }
+            
+            fetch_method = fetch_methods.get(p)
+            if fetch_method:
+                dynamic_models = fetch_method()
+                
+                # Merge with pricing data
+                merged_models = self._merge_dynamic_with_pricing(dynamic_models, p)
+                
+                # Update cache
+                self._model_cache[p] = {
+                    'models': merged_models if merged_models else PROVIDER_MODELS.get(p, {}).get('models', []),
+                    'fetched_at': time.time()
+                }
+                
+                print(f"✓ Refreshed model cache for {p}: {len(self._model_cache[p]['models'])} models")
+    
+    # ========================================================================
     # PROVIDER & MODEL MANAGEMENT
     # ========================================================================
     
@@ -463,26 +723,52 @@ class LLMRouter:
         self.provider_config['active_provider'] = provider
         self._save_config()
     
-    def get_models(self, provider: Optional[str] = None) -> List[Dict]:
+    def get_models(self, provider: Optional[str] = None, refresh: bool = False) -> List[Dict]:
         """
         Get available models for a provider with full metadata.
+        Uses dynamic discovery where available, with caching and fallback to hardcoded.
         
         Args:
             provider: Provider name (default: active provider)
+            refresh: Force refresh from API instead of using cache
             
         Returns:
             List of model dicts with id, name, tier, costs, etc.
         """
         provider = provider or self.active_provider
         
-        if provider not in PROVIDER_MODELS:
+        # Check if provider is available
+        if provider not in self.clients and provider not in PROVIDER_MODELS:
             return []
         
-        return PROVIDER_MODELS[provider]['models']
+        # Force refresh if requested
+        if refresh:
+            self.refresh_models(provider)
+        
+        # Try cache first
+        if self._is_cache_valid(provider) and not refresh:
+            print(f"✓ Using cached models for {provider}")
+            return self._model_cache[provider]['models']
+        
+        # Cache invalid or doesn't exist - fetch dynamically
+        if provider in self.clients:
+            self.refresh_models(provider)
+            
+            # Return cached result if refresh succeeded
+            if provider in self._model_cache:
+                return self._model_cache[provider]['models']
+        
+        # Fallback to hardcoded if dynamic fetch failed
+        if provider in PROVIDER_MODELS:
+            print(f"⚠ Using hardcoded model list for {provider} (dynamic fetch unavailable)")
+            return PROVIDER_MODELS[provider]['models']
+        
+        return []
     
     def get_model_info(self, model_id: str, provider: Optional[str] = None) -> Optional[Dict]:
         """
         Get detailed information about a specific model.
+        Checks cache first, then hardcoded definitions.
         
         Args:
             model_id: The model identifier
@@ -491,8 +777,16 @@ class LLMRouter:
         Returns:
             Model info dict or None if not found
         """
-        providers_to_search = [provider] if provider else PROVIDER_MODELS.keys()
+        providers_to_search = [provider] if provider else list(self.clients.keys()) + list(PROVIDER_MODELS.keys())
         
+        # First check cache (dynamic models)
+        for p in providers_to_search:
+            if p in self._model_cache:
+                for model in self._model_cache[p]['models']:
+                    if model['id'] == model_id:
+                        return {**model, 'provider': p}
+        
+        # Then check hardcoded definitions
         for p in providers_to_search:
             if p not in PROVIDER_MODELS:
                 continue
@@ -501,6 +795,28 @@ class LLMRouter:
                     return {**model, 'provider': p}
         
         return None
+    
+    def get_max_output_tokens(self, model_id: str, provider: Optional[str] = None) -> int:
+        """
+        Get maximum output tokens for a model.
+        Queries dynamically discovered models first, then hardcoded, then conservative fallback.
+        
+        Args:
+            model_id: The model identifier
+            provider: Provider name (optional, will search all if not specified)
+            
+        Returns:
+            Maximum output tokens (defaults to 4000 if not found)
+        """
+        # Get model info (checks cache then hardcoded)
+        model_info = self.get_model_info(model_id, provider)
+        
+        if model_info and 'max_output_tokens' in model_info:
+            return model_info['max_output_tokens']
+        
+        # Conservative fallback - safe for most models
+        # This ensures we don't cause truncation even if model info is missing
+        return 4000
     
     def estimate_cost(
         self,
@@ -885,7 +1201,7 @@ class LLMRouter:
     # Legacy methods for backward compatibility
     def get_nebius_models(self, refresh: bool = False) -> List[str]:
         """Get list of available models on Nebius."""
-        models = self.get_models('nebius')
+        models = self.get_models('nebius', refresh=refresh)
         return [m['id'] for m in models]
     
     def set_nebius_model(self, model_name: str):

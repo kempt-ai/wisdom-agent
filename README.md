@@ -20,6 +20,30 @@ Wisdom Agent is designed as a three-layer system:
 - Project-based organization for different contexts
 - Philosophy grounding at session start
 
+### Knowledge Base
+- Create collections to organize research
+- Index web content and documents
+- Searchable knowledge repository
+- Resource tagging and categorization
+- Cost estimation for indexing operations
+- Project-level organization
+- **Resource parsing** - Extract structured arguments from articles (thesis, claims, evidence)
+
+*Status: Backend fully functional. Frontend interface functional, parsing feature working.*
+
+### Argument Builder (In Development)
+
+Transform Knowledge Base resources into structured, navigable investigations. The Argument Builder enables:
+
+- **Readable prose with embedded links** - Investigations read naturally, with terms and claims linked to deeper explanations
+- **Structured claim pages** - Each claim has exposition, evidence, and counterarguments
+- **Source credibility tracking** - Evaluate and document the reliability of sources
+- **Threaded evidence** - Every snippet links back to its exact source location
+
+*Status: Design complete. Resource parsing (Phase 1) working. Full AB implementation in progress.*
+
+See [ARGUMENT_BUILDER_DESIGN.md](./ARGUMENT_BUILDER_DESIGN.md) for full specification.
+
 ### Fact/Logic/Wisdom Checker
 
 > ⚠️ **Status: Hidden from UI** - The F/L/W Checker backend is functional but currently hidden from the interface. Early testing revealed the analysis tends toward overly pedantic, uncharitable readings—ironically failing its own wisdom standards. We're pausing UI exposure while we improve the prompts and calibration. The backend code remains intact and the API endpoints work for testing.
@@ -31,34 +55,6 @@ Analyze any content across three dimensions:
 | **Factual** | Is it True? | Verifies claims against web sources, fact-check databases |
 | **Logical** | Is it Reasonable? | Analyzes argument structure, identifies reasoning issues |
 | **Wisdom** | Does it Support Wisdom? | Evaluates whether content supports conditions for wisdom |
-
-**Backend Capabilities (when re-enabled):**
-- URL or text input for analysis
-- Automatic claim extraction from content
-- Individual verification of each claim with confidence scores
-- Web search for evidence gathering (smart key term extraction)
-- Source citations with links
-- Integration with Google Fact Check API (with semantic relevance filtering)
-- LLM-based verification for novel claims
-- Fact-check results inform logic analysis for better soundness assessment
-- Cost estimation before analysis
-- Model selection (choose from 20+ models across providers)
-- Results saved to searchable repository
-
-**Verification Providers:**
-- **Google Fact Check API** - Searches existing fact-checks from PolitiFact, Snopes, FactCheck.org, etc.
-- **LLM Verification** - Web search + AI analysis for claims not in databases
-- **ClaimBuster** - Academic fact-check database (availability varies)
-
-### Knowledge Base
-- Create collections to organize research
-- Index web content and documents
-- Searchable knowledge repository
-- Resource tagging and categorization
-- Cost estimation for indexing operations
-- Project-level organization
-
-*Status: Backend fully functional. Frontend interface exists but needs polish.*
 
 ### Philosophy Framework
 
@@ -185,6 +181,7 @@ wisdom-agent/
 │   ├── routers/             # API endpoints
 │   │   ├── review_router.py      # Fact/Logic/Wisdom checker (hidden from UI)
 │   │   ├── knowledge.py          # Knowledge base
+│   │   ├── arguments.py          # Argument builder & resource parsing
 │   │   ├── chat.py               # Chat sessions
 │   │   ├── sessions.py           # Session management
 │   │   └── spending.py           # Budget tracking
@@ -195,6 +192,7 @@ wisdom-agent/
 │   │   ├── wisdom_evaluation_service.py # Wisdom assessment
 │   │   ├── claim_extraction_service.py  # Claim extraction
 │   │   ├── knowledge_service.py       # Knowledge base
+│   │   ├── parsing_service.py         # Resource parsing for arguments
 │   │   ├── reflection_service.py      # Session reflections
 │   │   ├── llm_router.py              # Multi-LLM routing
 │   │   └── web_search_service.py      # Web search
@@ -203,7 +201,9 @@ wisdom-agent/
 │   │   ├── google_factcheck.py   # Google Fact Check API
 │   │   └── claimbuster.py        # ClaimBuster API
 │   ├── database/            # DB models and connections
+│   │   └── argument_models.py    # Parsing & argument data models
 │   └── models/              # Pydantic request/response models
+│       └── argument_models.py    # Argument schemas
 ├── frontend/
 │   └── src/
 │       ├── app/             # Next.js pages
@@ -238,6 +238,13 @@ wisdom-agent/
 - Clear browser cache or use incognito mode
 - Check for TypeScript errors in terminal
 
+### Pydantic namespace warnings
+These warnings appear on startup but don't break functionality:
+```
+Field "model_id" has conflict with protected namespace "model_".
+```
+This is cosmetic and can be ignored.
+
 ### F/L/W Checker (for developers testing the hidden feature)
 - API endpoints remain functional at `/review/*`
 - Check backend logs for debug output
@@ -252,19 +259,21 @@ wisdom-agent/
 - Session summaries and 7 Values reflections
 - Knowledge Base (backend complete, frontend functional)
 - Project-based organization
-
-### Paused ⏸️
-- **Fact/Logic/Wisdom Checker** - Backend works but produces overly pedantic, uncharitable analysis. Hidden from UI while we improve prompt calibration and add genre-aware analysis (distinguishing journalism from academic papers from opinion pieces).
+- Resource parsing into structured arguments
 
 ### In Progress 🔄
+- **Argument Builder** - Full implementation (design complete, Phase 1 done)
 - Knowledge Base frontend polish
-- Session reflection integration across all activities (not just chat)
+- Session reflection integration across all activities
+
+### Paused ⏸️
+- **Fact/Logic/Wisdom Checker** - Backend works but produces overly pedantic analysis. Hidden from UI while we improve prompt calibration.
 
 ### Planned 📋
-- Modular argument/thesis builder
 - Link extraction and source verification
 - Genre-aware F/L/W analysis standards
 - Memory integration for KB activities
+- Collaborative editing and version control
 - Democracy tools and election monitoring (long-term)
 
 ## 🤝 Contributing

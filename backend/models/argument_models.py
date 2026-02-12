@@ -238,6 +238,10 @@ class ParsedResource(ParsedResourceBase):
     parsing_cost_tokens: int = 0
     parsing_cost_dollars: float = 0.0
     
+    # Calculated counts
+    argument_count: int = 0
+    claim_count: int = 0
+    
     sources_cited: List[str] = []
     claims: List[Claim] = []
     

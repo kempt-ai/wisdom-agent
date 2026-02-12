@@ -292,7 +292,8 @@ class ParsingService:
         self,
         resource_id: int,
         user_id: int,
-        model_id: Optional[str] = None
+        model_id: Optional[str] = None,
+        parse_level: str = "standard"
     ) -> ParseEstimate:
         """
         Estimate cost of parsing a resource.
@@ -325,8 +326,22 @@ class ParsingService:
             token_count = content_length // 4  # Rough estimate
         
         # Calculate parsing cost
+        # DYNAMIC: Get max_output_tokens from model capabilities
+        # This ensures we use each model's actual limits instead of hardcoded values
+        model_max_tokens = self.llm_router.get_max_output_tokens(model_id) if self.llm_router else 4000
+        
+        # Set parse level targets based on model capacity
+        # Light: 50% of max (quick overview)
+        # Standard: 75% of max (thorough analysis)
+        # Full: 100% of max (exhaustive extraction)
+        max_tokens_by_level = {
+            "light": min(2000, int(model_max_tokens * 0.5)),
+            "standard": min(int(model_max_tokens * 0.75), model_max_tokens),
+            "full": model_max_tokens
+        }
+        
         input_tokens = int(token_count * PARSING_INPUT_RATIO)
-        output_tokens = int(token_count * PARSING_OUTPUT_RATIO)
+        output_tokens = max_tokens_by_level.get(parse_level, model_max_tokens)
         
         # Get cost from router if available
         if self.llm_router:
@@ -408,11 +423,24 @@ class ParsingService:
             
             # Select prompt and max_tokens based on parse level
             parse_level = request.parse_level or "standard"
-            max_tokens_by_level = {"light": 2000, "standard": 8000, "full": 12000}
-            max_tokens = max_tokens_by_level.get(parse_level, 8000)
+            
+            # DYNAMIC: Get max_output_tokens from model capabilities
+            # This allows each model to work at its full capacity without truncation
+            model_max_tokens = self.llm_router.get_max_output_tokens(model_id)
+            
+            # Set parse level targets based on model capacity
+            # Light: 50% of max (quick overview, fewer arguments)
+            # Standard: 75% of max (thorough analysis with good depth)
+            # Full: 100% of max (exhaustive extraction, maximum detail)
+            max_tokens_by_level = {
+                "light": min(2000, int(model_max_tokens * 0.5)),
+                "standard": min(int(model_max_tokens * 0.75), model_max_tokens),
+                "full": model_max_tokens
+            }
+            max_tokens = max_tokens_by_level.get(parse_level, model_max_tokens)
             
             # Call LLM
-            logger.info(f"Parsing resource {request.resource_id} with {model_id} at {parse_level} level")
+            logger.info(f"Parsing resource {request.resource_id} with {model_id} at {parse_level} level (max_tokens={max_tokens})")
             
             prompt = PARSING_USER_PROMPTS.get(parse_level, PARSING_USER_PROMPTS["standard"]).format(content=content[:100000])  # Limit content size
             
@@ -592,6 +620,26 @@ class ParsingService:
         if include_claims:
             parsed.claims = await self.get_claims_for_resource(parsed_resource_id)
         
+        # Calculate argument_count and claim_count from structure_json
+        structure = parsed.structure_json if isinstance(parsed.structure_json, dict) else {}
+        arguments = structure.get('arguments', [])
+        
+        # Count top-level arguments
+        parsed.argument_count = len(arguments)
+        
+        # Count all claims recursively
+        def count_claims_recursive(args):
+            """Recursively count all claims in arguments and sub-arguments"""
+            count = 0
+            for arg in args:
+                count += 1  # The argument itself has a claim
+                sub_args = arg.get('sub_arguments', [])
+                if sub_args:
+                    count += count_claims_recursive(sub_args)
+            return count
+        
+        parsed.claim_count = count_claims_recursive(arguments)
+        
         return parsed
     
     async def get_parsed_for_resource(
@@ -617,6 +665,26 @@ class ParsingService:
         
         if include_claims:
             parsed.claims = await self.get_claims_for_resource(parsed.id)
+        
+        # Calculate argument_count and claim_count from structure_json
+        structure = parsed.structure_json if isinstance(parsed.structure_json, dict) else {}
+        arguments = structure.get('arguments', [])
+        
+        # Count top-level arguments
+        parsed.argument_count = len(arguments)
+        
+        # Count all claims recursively
+        def count_claims_recursive(args):
+            """Recursively count all claims in arguments and sub-arguments"""
+            count = 0
+            for arg in args:
+                count += 1  # The argument itself has a claim
+                sub_args = arg.get('sub_arguments', [])
+                if sub_args:
+                    count += count_claims_recursive(sub_args)
+            return count
+        
+        parsed.claim_count = count_claims_recursive(arguments)
         
         return parsed
     
