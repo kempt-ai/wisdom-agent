@@ -87,7 +87,7 @@ async def lifespan(app: FastAPI):
     # Create Argument Builder tables
     try:
         from backend.database.argument_tables import create_argument_tables
-        
+
         with engine.connect() as conn:
             use_postgres = 'postgres' in str(engine.url).lower()
             create_argument_tables(conn, use_postgres=use_postgres)
@@ -97,6 +97,20 @@ async def lifespan(app: FastAPI):
         print("⚠ Argument Builder tables module not found (optional)")
     except Exception as e:
         print(f"⚠ Argument Builder tables creation failed: {e}")
+
+    # Create Investigation Builder (AB) tables
+    try:
+        from backend.database.ab_tables import create_ab_tables
+
+        with engine.connect() as conn:
+            use_postgres = 'postgres' in str(engine.url).lower()
+            create_ab_tables(conn, use_postgres=use_postgres)
+            conn.commit()
+        print("✓ Investigation Builder tables verified/created")
+    except ImportError:
+        print("⚠ Investigation Builder tables module not found (optional)")
+    except Exception as e:
+        print(f"⚠ Investigation Builder tables creation failed: {e}")
     
     # ============================================
     # AUTO-INITIALIZE SERVICES (Week 3 Day 3)
@@ -264,6 +278,19 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         print(f"⚠ Parsing Service initialization failed: {e}")
     
+    # 11. Initialize Investigation Builder (AB) Service
+    try:
+        from backend.services.ab_service import get_ab_service
+        ab_service = get_ab_service()
+
+        if ab_service:
+            ab_service.initialize(db_connection=db)
+            print("✓ Investigation Builder Service initialized")
+    except ImportError:
+        print("⚠ Investigation Builder Service not found (optional)")
+    except Exception as e:
+        print(f"⚠ Investigation Builder Service initialization failed: {e}")
+
     print("-" * 40)
     print("Service initialization complete")
     print("-" * 40 + "\n")
@@ -451,6 +478,14 @@ try:
     print("✓ Argument Builder router registered")
 except ImportError as e:
     print(f"⚠ Argument Builder router not available: {e}")
+
+# Investigation Builder (AB) router
+try:
+    from backend.routers.ab_router import router as ab_router
+    app.include_router(ab_router, prefix="/api", tags=["Investigation Builder"])
+    print("✓ Investigation Builder router registered")
+except ImportError as e:
+    print(f"⚠ Investigation Builder router not available: {e}")
 
 
 if __name__ == "__main__":

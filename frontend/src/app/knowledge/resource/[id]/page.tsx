@@ -190,7 +190,7 @@ export default function ResourceDetailPage() {
     setEstimating(true);
     try {
       const response = await fetch(
-        `${API_BASE}/api/arguments/parse/estimate?resource_id=${resourceId}&model_id=${encodeURIComponent(selectedModel)}`,
+        `${API_BASE}/api/arguments/parse/estimate?resource_id=${resourceId}&model_id=${encodeURIComponent(selectedModel)}&parse_level=${encodeURIComponent(selectedLevel)}`,
         { method: 'POST' }
       );
       
