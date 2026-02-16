@@ -1,7 +1,8 @@
 'use client';
 
-import { MessageSquareQuote, Clock, FileText, Shield } from 'lucide-react';
+import { MessageSquareQuote, Clock, Shield } from 'lucide-react';
 import { ABClaim } from '@/lib/arguments-api';
+import { EvidenceCard } from '@/components/arguments/EvidenceCard';
 
 interface ClaimViewProps {
   claim: ABClaim;
@@ -16,8 +17,8 @@ const statusConfig: Record<string, { label: string; color: string; bg: string }>
 
 /**
  * Displays a claim in the slide-out panel.
- * Shows title, claim text, exposition, status, and temporal note.
- * Evidence and counterarguments sections are placeholders for Phase 4+.
+ * Shows title, claim text, exposition, status, temporal note,
+ * evidence cards, and counterarguments.
  */
 export function ClaimView({ claim }: ClaimViewProps) {
   const status = statusConfig[claim.status] || statusConfig.ongoing;
@@ -61,24 +62,15 @@ export function ClaimView({ claim }: ClaimViewProps) {
         </div>
       )}
 
-      {/* Evidence placeholder */}
+      {/* Evidence */}
       <div className="mb-6">
-        <h4 className="text-sm font-medium text-slate-400 uppercase tracking-wider mb-2">Evidence</h4>
+        <h4 className="text-sm font-medium text-slate-400 uppercase tracking-wider mb-2">
+          Evidence ({claim.evidence.length})
+        </h4>
         {claim.evidence.length > 0 ? (
-          <div className="space-y-2">
+          <div className="space-y-3">
             {claim.evidence.map((ev) => (
-              <div
-                key={ev.id}
-                className="bg-slate-50 rounded-lg border border-slate-200 p-3"
-              >
-                <div className="flex items-center gap-2 text-sm font-medium text-slate-700">
-                  <FileText className="w-4 h-4 text-slate-400" />
-                  {ev.source_title || 'Untitled source'}
-                </div>
-                {ev.key_point && (
-                  <p className="text-sm text-slate-500 mt-1">{ev.key_point}</p>
-                )}
-              </div>
+              <EvidenceCard key={ev.id} evidence={ev} />
             ))}
           </div>
         ) : (

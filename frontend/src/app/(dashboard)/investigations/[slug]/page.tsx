@@ -114,18 +114,13 @@ export default function InvestigationDetailPage() {
     const container = overviewRef.current;
     if (!container) return;
 
-    console.log('[SlideOutPanel] Setting up click listener on overview container', container);
-
     function handleClick(e: MouseEvent) {
       const target = e.target as HTMLElement;
-      console.log('[SlideOutPanel] Click in overview:', target.tagName, target.className);
-
       const link = target.closest('a.ab-link') as HTMLAnchorElement | null;
       if (!link) return;
 
       e.preventDefault();
       const href = link.getAttribute('href') || '';
-      console.log('[SlideOutPanel] AB link clicked:', href, link.className);
 
       if (link.classList.contains('ab-definition')) {
         // href format: "#def:slug"
@@ -246,7 +241,8 @@ export default function InvestigationDetailPage() {
               {investigation.definitions.map((def) => (
                 <div
                   key={def.id}
-                  className="bg-white rounded-lg border border-slate-200 p-4 hover:border-blue-300 transition-colors"
+                  onClick={() => openDefinition(def.slug)}
+                  className="bg-white rounded-lg border border-slate-200 p-4 hover:border-blue-300 transition-colors cursor-pointer"
                 >
                   <h3 className="font-medium text-blue-600">{def.term}</h3>
                   <div
@@ -270,7 +266,8 @@ export default function InvestigationDetailPage() {
               {investigation.claims.map((claim) => (
                 <div
                   key={claim.id}
-                  className="bg-white rounded-lg border border-slate-200 p-4 hover:border-orange-300 transition-colors"
+                  onClick={() => openClaim(claim.slug)}
+                  className="bg-white rounded-lg border border-slate-200 p-4 hover:border-orange-300 transition-colors cursor-pointer"
                 >
                   <div className="flex items-start justify-between gap-3">
                     <h3 className="font-medium text-orange-600">{claim.title}</h3>
