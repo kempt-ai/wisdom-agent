@@ -2,14 +2,18 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import {
   RefreshCw,
   BookOpen,
   MessageSquareQuote,
   AlertCircle,
   Scale,
+  Plus,
 } from 'lucide-react';
 import { argumentsApi, InvestigationSummary } from '@/lib/arguments-api';
+import { SlideOutPanel } from '@/components/arguments/SlideOutPanel';
+import { InvestigationEditor } from '@/components/arguments/InvestigationEditor';
 
 // Status badge config
 const statusConfig: Record<string, { label: string; color: string; bg: string }> = {
@@ -19,9 +23,11 @@ const statusConfig: Record<string, { label: string; color: string; bg: string }>
 };
 
 export default function InvestigationsListPage() {
+  const router = useRouter();
   const [investigations, setInvestigations] = useState<InvestigationSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showCreate, setShowCreate] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -58,6 +64,13 @@ export default function InvestigationsListPage() {
               <Scale className="w-6 h-6 text-indigo-600" />
               <h1 className="text-xl font-semibold text-slate-900">Investigations</h1>
             </div>
+            <button
+              onClick={() => setShowCreate(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors"
+            >
+              <Plus className="w-4 h-4" />
+              New Investigation
+            </button>
           </div>
         </div>
       </header>
@@ -92,6 +105,13 @@ export default function InvestigationsListPage() {
             <p className="text-slate-500 mb-6">
               Create your first investigation to start building structured arguments.
             </p>
+            <button
+              onClick={() => setShowCreate(true)}
+              className="inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors"
+            >
+              <Plus className="w-4 h-4" />
+              New Investigation
+            </button>
           </div>
         )}
 
@@ -140,6 +160,21 @@ export default function InvestigationsListPage() {
           </div>
         )}
       </main>
+
+      {/* Create investigation panel */}
+      <SlideOutPanel
+        isOpen={showCreate}
+        onClose={() => setShowCreate(false)}
+        title="New Investigation"
+      >
+        <InvestigationEditor
+          onSaved={(inv) => {
+            setShowCreate(false);
+            router.push(`/investigations/${inv.slug}`);
+          }}
+          onCancel={() => setShowCreate(false)}
+        />
+      </SlideOutPanel>
     </div>
   );
 }

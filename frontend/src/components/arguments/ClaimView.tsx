@@ -1,11 +1,15 @@
 'use client';
 
-import { MessageSquareQuote, Clock, Shield } from 'lucide-react';
-import { ABClaim } from '@/lib/arguments-api';
+import { useState } from 'react';
+import { MessageSquareQuote, Clock, Shield, Plus } from 'lucide-react';
+import { ABClaim, ABEvidence } from '@/lib/arguments-api';
 import { EvidenceCard } from '@/components/arguments/EvidenceCard';
+import { EvidenceEditor } from '@/components/arguments/EvidenceEditor';
 
 interface ClaimViewProps {
   claim: ABClaim;
+  /** Called when evidence is added, so parent can refresh data */
+  onAddEvidence?: () => void;
 }
 
 const statusConfig: Record<string, { label: string; color: string; bg: string }> = {
@@ -20,8 +24,10 @@ const statusConfig: Record<string, { label: string; color: string; bg: string }>
  * Shows title, claim text, exposition, status, temporal note,
  * evidence cards, and counterarguments.
  */
-export function ClaimView({ claim }: ClaimViewProps) {
+export function ClaimView({ claim, onAddEvidence }: ClaimViewProps) {
   const status = statusConfig[claim.status] || statusConfig.ongoing;
+  const [showEvidenceEditor, setShowEvidenceEditor] = useState(false);
+  const [localEvidence, setLocalEvidence] = useState<ABEvidence[]>(claim.evidence);
 
   return (
     <div>
@@ -64,12 +70,39 @@ export function ClaimView({ claim }: ClaimViewProps) {
 
       {/* Evidence */}
       <div className="mb-6">
-        <h4 className="text-sm font-medium text-slate-400 uppercase tracking-wider mb-2">
-          Evidence ({claim.evidence.length})
-        </h4>
-        {claim.evidence.length > 0 ? (
+        <div className="flex items-center justify-between mb-2">
+          <h4 className="text-sm font-medium text-slate-400 uppercase tracking-wider">
+            Evidence ({localEvidence.length})
+          </h4>
+          {!showEvidenceEditor && (
+            <button
+              onClick={() => setShowEvidenceEditor(true)}
+              className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium text-indigo-600 border border-indigo-200 rounded hover:bg-indigo-50 transition-colors"
+            >
+              <Plus className="w-3 h-3" />
+              Add Evidence
+            </button>
+          )}
+        </div>
+
+        {/* Inline evidence editor */}
+        {showEvidenceEditor && (
+          <div className="mb-3 bg-slate-50 rounded-lg border border-slate-200 p-4">
+            <EvidenceEditor
+              claimId={claim.id}
+              onSaved={(ev) => {
+                setLocalEvidence([...localEvidence, ev]);
+                setShowEvidenceEditor(false);
+                onAddEvidence?.();
+              }}
+              onCancel={() => setShowEvidenceEditor(false)}
+            />
+          </div>
+        )}
+
+        {localEvidence.length > 0 ? (
           <div className="space-y-3">
-            {claim.evidence.map((ev) => (
+            {localEvidence.map((ev) => (
               <EvidenceCard key={ev.id} evidence={ev} />
             ))}
           </div>

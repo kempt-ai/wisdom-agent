@@ -177,6 +177,28 @@ export const argumentsApi = {
     );
   },
 
+  async createDefinition(slug: string, data: {
+    term: string;
+    definition_html?: string;
+    see_also?: string[];
+  }): Promise<Definition> {
+    return fetchAPI<Definition>(
+      `${AB_PREFIX}/investigations/${encodeURIComponent(slug)}/definitions`,
+      { method: 'POST', body: JSON.stringify(data) }
+    );
+  },
+
+  async updateDefinition(slug: string, defSlug: string, data: {
+    term?: string;
+    definition_html?: string;
+    see_also?: string[];
+  }): Promise<Definition> {
+    return fetchAPI<Definition>(
+      `${AB_PREFIX}/investigations/${encodeURIComponent(slug)}/definitions/${encodeURIComponent(defSlug)}`,
+      { method: 'PUT', body: JSON.stringify(data) }
+    );
+  },
+
   // ----------------------------------------
   // Claims
   // ----------------------------------------
@@ -190,6 +212,67 @@ export const argumentsApi = {
       `${AB_PREFIX}/investigations/${encodeURIComponent(slug)}/claims/${encodeURIComponent(claimSlug)}`
     );
   },
+
+  async createClaim(slug: string, data: {
+    title: string;
+    claim_text: string;
+    exposition_html?: string;
+    status?: string;
+    temporal_note?: string;
+    position?: number;
+  }): Promise<ABClaim> {
+    return fetchAPI<ABClaim>(
+      `${AB_PREFIX}/investigations/${encodeURIComponent(slug)}/claims`,
+      { method: 'POST', body: JSON.stringify(data) }
+    );
+  },
+
+  async updateClaim(slug: string, claimSlug: string, data: {
+    title?: string;
+    claim_text?: string;
+    exposition_html?: string;
+    status?: string;
+    temporal_note?: string;
+    position?: number;
+  }): Promise<ABClaim> {
+    return fetchAPI<ABClaim>(
+      `${AB_PREFIX}/investigations/${encodeURIComponent(slug)}/claims/${encodeURIComponent(claimSlug)}`,
+      { method: 'PUT', body: JSON.stringify(data) }
+    );
+  },
+
+  // ----------------------------------------
+  // Evidence
+  // ----------------------------------------
+
+  async createEvidence(claimId: number, data: {
+    source_title?: string;
+    source_url?: string;
+    source_type?: string;
+    key_quote?: string;
+    key_point?: string;
+    kb_resource_id?: number;
+    position?: number;
+  }): Promise<ABEvidence> {
+    return fetchAPI<ABEvidence>(
+      `${AB_PREFIX}/claims/${claimId}/evidence`,
+      { method: 'POST', body: JSON.stringify(data) }
+    );
+  },
+
+  async updateEvidence(evidenceId: number, data: {
+    source_title?: string;
+    source_url?: string;
+    source_type?: string;
+    key_quote?: string;
+    key_point?: string;
+    position?: number;
+  }): Promise<ABEvidence> {
+    return fetchAPI<ABEvidence>(
+      `${AB_PREFIX}/evidence/${evidenceId}`,
+      { method: 'PUT', body: JSON.stringify(data) }
+    );
+  },
 };
 
 // Export individual functions for flexibility
@@ -201,6 +284,12 @@ export const {
   deleteInvestigation,
   listDefinitions,
   getDefinition,
+  createDefinition,
+  updateDefinition,
   listClaims,
   getClaim,
+  createClaim,
+  updateClaim,
+  createEvidence,
+  updateEvidence,
 } = argumentsApi;

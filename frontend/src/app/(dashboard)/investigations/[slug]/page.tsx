@@ -11,12 +11,17 @@ import {
   MessageSquareQuote,
   Scale,
   Clock,
+  Pencil,
+  Plus,
 } from 'lucide-react';
 import { argumentsApi, Investigation, Definition, ABClaim } from '@/lib/arguments-api';
 import { InvestigationOverview } from '@/components/arguments/InvestigationOverview';
 import { SlideOutPanel } from '@/components/arguments/SlideOutPanel';
 import { DefinitionView } from '@/components/arguments/DefinitionView';
 import { ClaimView } from '@/components/arguments/ClaimView';
+import { InvestigationEditor } from '@/components/arguments/InvestigationEditor';
+import { DefinitionEditor } from '@/components/arguments/DefinitionEditor';
+import { ClaimEditor } from '@/components/arguments/ClaimEditor';
 
 const statusConfig: Record<string, { label: string; color: string; bg: string }> = {
   draft: { label: 'Draft', color: 'text-amber-700', bg: 'bg-amber-50 border-amber-200' },
@@ -33,8 +38,9 @@ export default function InvestigationDetailPage() {
   const [error, setError] = useState<string | null>(null);
 
   // Slide-out panel state
+  type PanelMode = 'definition' | 'claim' | 'edit-investigation' | 'add-definition' | 'edit-definition' | 'add-claim' | 'edit-claim';
   const [panelOpen, setPanelOpen] = useState(false);
-  const [panelType, setPanelType] = useState<'definition' | 'claim' | null>(null);
+  const [panelType, setPanelType] = useState<PanelMode | null>(null);
   const [panelData, setPanelData] = useState<Definition | ABClaim | null>(null);
   const [panelLoading, setPanelLoading] = useState(false);
   const [panelError, setPanelError] = useState<string | null>(null);
@@ -106,6 +112,20 @@ export default function InvestigationDetailPage() {
       setPanelLoading(false);
     }
   }, [slug]);
+
+  function openEditor(mode: PanelMode, data?: Definition | ABClaim) {
+    setPanelType(mode);
+    setPanelData(data || null);
+    setPanelLoading(false);
+    setPanelError(null);
+    setPanelOpen(true);
+  }
+
+  /** Called after any editor saves — refresh investigation data and close panel */
+  async function handleEditorSaved() {
+    closePanel();
+    await loadData();
+  }
 
   // Intercept clicks on ab-definition and ab-claim links in the overview.
   // Must depend on `investigation` so the effect re-runs after data loads —
@@ -182,9 +202,18 @@ export default function InvestigationDetailPage() {
                 {investigation.title}
               </h1>
             </div>
-            <span className={`inline-flex items-center px-2.5 py-1 rounded text-xs font-medium border ${status.bg} ${status.color}`}>
-              {status.label}
-            </span>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => openEditor('edit-investigation')}
+                className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-slate-500 border border-slate-200 rounded hover:bg-slate-50 hover:text-slate-700 transition-colors"
+              >
+                <Pencil className="w-3 h-3" />
+                Edit
+              </button>
+              <span className={`inline-flex items-center px-2.5 py-1 rounded text-xs font-medium border ${status.bg} ${status.color}`}>
+                {status.label}
+              </span>
+            </div>
           </div>
         </div>
       </header>
@@ -231,12 +260,21 @@ export default function InvestigationDetailPage() {
         </div>
 
         {/* Definitions list */}
-        {investigation.definitions.length > 0 && (
-          <div className="mb-8">
-            <h2 className="text-lg font-semibold text-slate-800 mb-4 flex items-center gap-2">
+        <div className="mb-8">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold text-slate-800 flex items-center gap-2">
               <BookOpen className="w-5 h-5 text-blue-500" />
               Definitions ({investigation.definitions.length})
             </h2>
+            <button
+              onClick={() => openEditor('add-definition')}
+              className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-blue-600 border border-blue-200 rounded hover:bg-blue-50 transition-colors"
+            >
+              <Plus className="w-3 h-3" />
+              Add Definition
+            </button>
+          </div>
+          {investigation.definitions.length > 0 ? (
             <div className="space-y-2">
               {investigation.definitions.map((def) => (
                 <div
@@ -252,16 +290,27 @@ export default function InvestigationDetailPage() {
                 </div>
               ))}
             </div>
-          </div>
-        )}
+          ) : (
+            <p className="text-sm text-slate-400 italic">No definitions yet.</p>
+          )}
+        </div>
 
         {/* Claims list */}
-        {investigation.claims.length > 0 && (
-          <div className="mb-8">
-            <h2 className="text-lg font-semibold text-slate-800 mb-4 flex items-center gap-2">
+        <div className="mb-8">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold text-slate-800 flex items-center gap-2">
               <MessageSquareQuote className="w-5 h-5 text-orange-500" />
               Claims ({investigation.claims.length})
             </h2>
+            <button
+              onClick={() => openEditor('add-claim')}
+              className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-orange-600 border border-orange-200 rounded hover:bg-orange-50 transition-colors"
+            >
+              <Plus className="w-3 h-3" />
+              Add Claim
+            </button>
+          </div>
+          {investigation.claims.length > 0 ? (
             <div className="space-y-2">
               {investigation.claims.map((claim) => (
                 <div
@@ -283,16 +332,28 @@ export default function InvestigationDetailPage() {
                 </div>
               ))}
             </div>
-          </div>
-        )}
+          ) : (
+            <p className="text-sm text-slate-400 italic">No claims yet.</p>
+          )}
+        </div>
       </main>
 
-      {/* Slide-out panel for definitions and claims */}
+      {/* Slide-out panel for views and editors */}
       <SlideOutPanel
         isOpen={panelOpen}
         onClose={closePanel}
-        title={panelType === 'definition' ? 'Definition' : panelType === 'claim' ? 'Claim' : undefined}
+        title={
+          panelType === 'definition' ? 'Definition'
+            : panelType === 'claim' ? 'Claim'
+            : panelType === 'edit-investigation' ? 'Edit Investigation'
+            : panelType === 'add-definition' ? 'New Definition'
+            : panelType === 'edit-definition' ? 'Edit Definition'
+            : panelType === 'add-claim' ? 'New Claim'
+            : panelType === 'edit-claim' ? 'Edit Claim'
+            : undefined
+        }
       >
+        {/* Loading state */}
         {panelLoading && (
           <div className="flex items-center justify-center py-12">
             <RefreshCw className="w-5 h-5 text-indigo-600 animate-spin" />
@@ -305,14 +366,90 @@ export default function InvestigationDetailPage() {
             <p className="text-sm text-slate-600">{panelError}</p>
           </div>
         )}
+
+        {/* View: Definition */}
         {!panelLoading && !panelError && panelData && panelType === 'definition' && (
-          <DefinitionView
-            definition={panelData as Definition}
-            onSeeAlsoClick={(defSlug) => openDefinition(defSlug)}
+          <>
+            <DefinitionView
+              definition={panelData as Definition}
+              onSeeAlsoClick={(defSlug) => openDefinition(defSlug)}
+            />
+            <div className="mt-6 pt-4 border-t border-slate-200">
+              <button
+                onClick={() => openEditor('edit-definition', panelData)}
+                className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-slate-500 border border-slate-200 rounded hover:bg-slate-50 transition-colors"
+              >
+                <Pencil className="w-3 h-3" />
+                Edit Definition
+              </button>
+            </div>
+          </>
+        )}
+
+        {/* View: Claim */}
+        {!panelLoading && !panelError && panelData && panelType === 'claim' && (
+          <>
+            <ClaimView
+              claim={panelData as ABClaim}
+              onAddEvidence={() => loadData()}
+            />
+            <div className="mt-6 pt-4 border-t border-slate-200">
+              <button
+                onClick={() => openEditor('edit-claim', panelData)}
+                className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-slate-500 border border-slate-200 rounded hover:bg-slate-50 transition-colors"
+              >
+                <Pencil className="w-3 h-3" />
+                Edit Claim
+              </button>
+            </div>
+          </>
+        )}
+
+        {/* Editor: Investigation */}
+        {panelType === 'edit-investigation' && (
+          <InvestigationEditor
+            investigation={investigation}
+            onSaved={handleEditorSaved}
+            onCancel={closePanel}
           />
         )}
-        {!panelLoading && !panelError && panelData && panelType === 'claim' && (
-          <ClaimView claim={panelData as ABClaim} />
+
+        {/* Editor: New Definition */}
+        {panelType === 'add-definition' && (
+          <DefinitionEditor
+            investigationSlug={slug}
+            onSaved={handleEditorSaved}
+            onCancel={closePanel}
+          />
+        )}
+
+        {/* Editor: Edit Definition */}
+        {panelType === 'edit-definition' && panelData && (
+          <DefinitionEditor
+            investigationSlug={slug}
+            definition={panelData as Definition}
+            onSaved={handleEditorSaved}
+            onCancel={closePanel}
+          />
+        )}
+
+        {/* Editor: New Claim */}
+        {panelType === 'add-claim' && (
+          <ClaimEditor
+            investigationSlug={slug}
+            onSaved={handleEditorSaved}
+            onCancel={closePanel}
+          />
+        )}
+
+        {/* Editor: Edit Claim */}
+        {panelType === 'edit-claim' && panelData && (
+          <ClaimEditor
+            investigationSlug={slug}
+            claim={panelData as ABClaim}
+            onSaved={handleEditorSaved}
+            onCancel={closePanel}
+          />
         )}
       </SlideOutPanel>
     </div>
