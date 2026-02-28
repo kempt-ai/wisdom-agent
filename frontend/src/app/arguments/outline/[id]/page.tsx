@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useState, useEffect, useRef } from 'react';
+import { useParams, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import {
   ArrowLeft, ChevronDown, ChevronRight, FileText, Quote,
@@ -67,24 +67,54 @@ const claimTypeColors: Record<string, string> = {
   prescriptive: 'bg-amber-50 text-amber-700 border-amber-200',
 };
 
-function OutlineNodeComponent({ 
-  node, 
-  depth = 0 
-}: { 
-  node: OutlineNode; 
+/** Returns true if `node` or any of its descendants has the given id */
+function containsNodeId(node: OutlineNode, id: string): boolean {
+  if (node.id === id) return true;
+  return (node.children || []).some((child) => containsNodeId(child, id));
+}
+
+function OutlineNodeComponent({
+  node,
+  depth = 0,
+  highlightId,
+}: {
+  node: OutlineNode;
   depth?: number;
+  highlightId?: string;
 }) {
-  const [expanded, setExpanded] = useState(depth < 2);
   const hasChildren = node.children && node.children.length > 0;
-  
-  const EvidenceIcon = node.node_type === 'evidence' 
+  const isHighlighted = !!highlightId && node.id === highlightId;
+  const ancestorOfHighlight = !!highlightId && !isHighlighted && containsNodeId(node, highlightId);
+
+  // Auto-expand if this node contains the highlighted target
+  const [expanded, setExpanded] = useState(depth < 2 || ancestorOfHighlight);
+
+  // Fade-out highlight: start lit, turn off after 2.5 s
+  const [lit, setLit] = useState(isHighlighted);
+  const nodeRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!isHighlighted) return;
+    // Scroll into view after a brief tick so the tree has rendered
+    const scrollTimer = setTimeout(() => {
+      nodeRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 150);
+    // Fade out after 2.5 s
+    const fadeTimer = setTimeout(() => setLit(false), 2500);
+    return () => { clearTimeout(scrollTimer); clearTimeout(fadeTimer); };
+  }, [isHighlighted]);
+
+  const EvidenceIcon = node.node_type === 'evidence'
     ? evidenceIcons[node.title.replace(/[\[\]]/g, '').toLowerCase()] || FileText
     : null;
-  
+
   return (
     <div className={`${depth > 0 ? 'ml-4 border-l-2 border-slate-100 pl-4' : ''}`}>
-      <div 
-        className={`flex items-start gap-2 py-2 ${hasChildren ? 'cursor-pointer' : ''}`}
+      <div
+        ref={isHighlighted ? nodeRef : undefined}
+        className={`flex items-start gap-2 py-2 rounded-lg transition-colors duration-1000 ${
+          hasChildren ? 'cursor-pointer' : ''
+        } ${lit ? 'bg-amber-50 ring-2 ring-amber-300 px-2' : ''}`}
         onClick={() => hasChildren && setExpanded(!expanded)}
       >
         {/* Expand/collapse toggle */}
@@ -94,17 +124,17 @@ function OutlineNodeComponent({
           </button>
         )}
         {!hasChildren && <div className="w-4" />}
-        
+
         {/* Node content */}
         <div className="flex-1">
           {node.node_type === 'evidence' ? (
-            <div className="flex items-start gap-2 bg-slate-50 rounded-lg p-3">
+            <div className={`flex items-start gap-2 rounded-lg p-3 ${lit ? 'bg-amber-50' : 'bg-slate-50'}`}>
               {EvidenceIcon && <EvidenceIcon className="w-4 h-4 text-slate-400 mt-0.5" />}
               <div>
                 <span className="text-xs text-slate-500 uppercase">{node.title}</span>
                 <p className="text-sm text-slate-700">{node.content}</p>
                 {node.source_url && (
-                  <a 
+                  <a
                     href={node.source_url}
                     target="_blank"
                     rel="noopener noreferrer"
@@ -142,12 +172,12 @@ function OutlineNodeComponent({
           )}
         </div>
       </div>
-      
+
       {/* Children */}
       {expanded && hasChildren && (
         <div className="mt-1">
           {node.children!.map((child, i) => (
-            <OutlineNodeComponent key={child.id || i} node={child} depth={depth + 1} />
+            <OutlineNodeComponent key={child.id || i} node={child} depth={depth + 1} highlightId={highlightId} />
           ))}
         </div>
       )}
@@ -157,8 +187,9 @@ function OutlineNodeComponent({
 
 export default function OutlinePage() {
   const params = useParams();
-  const router = useRouter();
+  const searchParams = useSearchParams();
   const parsedId = Number(params.id);
+  const highlightId = searchParams.get('highlight') ?? undefined;
   
   const [outline, setOutline] = useState<ParsedOutline | null>(null);
   const [parseMeta, setParseMeta] = useState<ParsedResource | null>(null);
@@ -221,12 +252,9 @@ export default function OutlinePage() {
         <div className="text-center">
           <AlertCircle className="w-12 h-12 text-red-400 mx-auto mb-4" />
           <p className="text-slate-700 mb-4">{error || 'Outline not found'}</p>
-          <button
-            onClick={() => router.back()}
-            className="text-indigo-600 hover:underline"
-          >
-            ← Go back
-          </button>
+          <Link href="/knowledge" className="text-indigo-600 hover:underline">
+            ← Knowledge Base
+          </Link>
         </div>
       </div>
     );
@@ -238,13 +266,15 @@ export default function OutlinePage() {
       <header className="bg-white border-b border-slate-200 sticky top-0 z-10">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
-            <div className="flex items-center gap-4">
-              <button
-                onClick={() => router.back()}
-                className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg"
+            <div className="flex items-center gap-2">
+              <Link
+                href={`/knowledge/resource/${outline.resource_id}`}
+                className="flex items-center gap-1 text-slate-500 hover:text-slate-700 transition-colors"
               >
-                <ArrowLeft className="w-5 h-5" />
-              </button>
+                <ArrowLeft className="w-4 h-4" />
+                <span className="text-sm">Resource</span>
+              </Link>
+              <span className="text-slate-300">/</span>
               <div>
                 <h1 className="text-lg font-semibold text-slate-900 truncate max-w-md">
                   {outline.resource_name}
@@ -286,6 +316,14 @@ export default function OutlinePage() {
       </header>
       
       <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Highlight banner */}
+        {highlightId && (
+          <div className="mb-4 flex items-center gap-2 px-4 py-2 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800">
+            <span className="font-medium">Linked from evidence</span>
+            <span className="text-amber-600">— the highlighted node is scrolled into view below.</span>
+          </div>
+        )}
+
         {/* Thesis & Summary */}
         <div className="bg-white rounded-lg border border-slate-200 p-6 mb-6">
           {outline.main_thesis && (
@@ -316,7 +354,7 @@ export default function OutlinePage() {
           {outline.outline.length > 0 ? (
             <div className="space-y-2">
               {outline.outline.map((node, i) => (
-                <OutlineNodeComponent key={node.id || i} node={node} />
+                <OutlineNodeComponent key={node.id || i} node={node} highlightId={highlightId} />
               ))}
             </div>
           ) : (

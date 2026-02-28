@@ -1,7 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { MessageSquareQuote, Clock, Shield, Plus } from 'lucide-react';
+import { MessageSquareQuote, Clock, Shield, Plus, Scale, ArrowRight } from 'lucide-react';
+import Link from 'next/link';
 import { ABClaim, ABEvidence } from '@/lib/arguments-api';
 import { EvidenceCard } from '@/components/arguments/EvidenceCard';
 import { EvidenceEditor } from '@/components/arguments/EvidenceEditor';
@@ -68,6 +69,27 @@ export function ClaimView({ claim, onAddEvidence }: ClaimViewProps) {
         </div>
       )}
 
+      {/* Sub-Investigation link */}
+      {claim.linked_investigation && (
+        <div className="mb-6">
+          <h4 className="text-sm font-medium text-slate-400 uppercase tracking-wider mb-2">
+            Sub-Investigation
+          </h4>
+          <Link
+            href={`/investigations/${claim.linked_investigation.slug}`}
+            className="flex items-center justify-between gap-3 bg-indigo-50 border border-indigo-200 rounded-lg px-4 py-3 hover:bg-indigo-100 transition-colors group"
+          >
+            <div className="flex items-center gap-2 min-w-0">
+              <Scale className="w-4 h-4 text-indigo-500 shrink-0" />
+              <span className="text-sm font-medium text-indigo-700 truncate">
+                {claim.linked_investigation.title}
+              </span>
+            </div>
+            <ArrowRight className="w-4 h-4 text-indigo-400 shrink-0 group-hover:translate-x-0.5 transition-transform" />
+          </Link>
+        </div>
+      )}
+
       {/* Evidence */}
       <div className="mb-6">
         <div className="flex items-center justify-between mb-2">
@@ -91,7 +113,7 @@ export function ClaimView({ claim, onAddEvidence }: ClaimViewProps) {
             <EvidenceEditor
               claimId={claim.id}
               onSaved={(ev) => {
-                setLocalEvidence([...localEvidence, ev]);
+                setLocalEvidence((prev) => [...prev, ev]);
                 setShowEvidenceEditor(false);
                 onAddEvidence?.();
               }}

@@ -50,14 +50,16 @@ export default function InvestigationDetailPage() {
     if (slug) loadData();
   }, [slug]);
 
-  async function loadData() {
+  async function loadData(): Promise<Investigation | null> {
     setLoading(true);
     setError(null);
     try {
       const data = await argumentsApi.getInvestigation(slug);
       setInvestigation(data);
+      return data;
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load investigation');
+      return null;
     } finally {
       setLoading(false);
     }
@@ -391,7 +393,14 @@ export default function InvestigationDetailPage() {
           <>
             <ClaimView
               claim={panelData as ABClaim}
-              onAddEvidence={() => loadData()}
+              onAddEvidence={async () => {
+                const updated = await loadData();
+                if (updated) {
+                  const claimSlug = (panelData as ABClaim).slug;
+                  const refreshed = updated.claims.find((c) => c.slug === claimSlug);
+                  if (refreshed) setPanelData(refreshed);
+                }
+              }}
             />
             <div className="mt-6 pt-4 border-t border-slate-200">
               <button

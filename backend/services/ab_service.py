@@ -24,7 +24,7 @@ from backend.models.ab_schemas import (
     Counterargument, CounterargumentCreate, CounterargumentUpdate,
     SourceCredibility, SourceCredibilityCreate,
     EvidenceCredibility, EvidenceCredibilityCreate,
-    ChangelogEntry,
+    ChangelogEntry, LinkedInvestigationRef,
 )
 
 logger = logging.getLogger(__name__)
@@ -202,6 +202,8 @@ class ABService:
         for c in claim_rows:
             evidence = await self._get_evidence_for_claim(c.id)
             counterarguments = await self._get_counterarguments_for_claim(c.id)
+            linked_inv_id = getattr(c, 'linked_investigation_id', None)
+            linked_investigation = await self._resolve_linked_investigation(linked_inv_id)
             claims.append(ABClaim(
                 id=c.id, investigation_id=c.investigation_id, title=c.title,
                 slug=c.slug, claim_text=c.claim_text,
@@ -209,6 +211,8 @@ class ABService:
                 temporal_note=c.temporal_note, position=c.position,
                 created_at=c.created_at, updated_at=c.updated_at,
                 evidence=evidence, counterarguments=counterarguments,
+                linked_investigation_id=linked_inv_id,
+                linked_investigation=linked_investigation,
             ))
 
         return Investigation(
@@ -463,6 +467,8 @@ class ABService:
         for c in rows:
             evidence = await self._get_evidence_for_claim(c.id)
             counterarguments = await self._get_counterarguments_for_claim(c.id)
+            linked_inv_id = getattr(c, 'linked_investigation_id', None)
+            linked_investigation = await self._resolve_linked_investigation(linked_inv_id)
             claims.append(ABClaim(
                 id=c.id, investigation_id=c.investigation_id, title=c.title,
                 slug=c.slug, claim_text=c.claim_text,
@@ -470,6 +476,8 @@ class ABService:
                 temporal_note=c.temporal_note, position=c.position,
                 created_at=c.created_at, updated_at=c.updated_at,
                 evidence=evidence, counterarguments=counterarguments,
+                linked_investigation_id=linked_inv_id,
+                linked_investigation=linked_investigation,
             ))
 
         return claims
@@ -490,6 +498,8 @@ class ABService:
 
         evidence = await self._get_evidence_for_claim(row.id)
         counterarguments = await self._get_counterarguments_for_claim(row.id)
+        linked_inv_id = getattr(row, 'linked_investigation_id', None)
+        linked_investigation = await self._resolve_linked_investigation(linked_inv_id)
 
         return ABClaim(
             id=row.id, investigation_id=row.investigation_id, title=row.title,
@@ -498,6 +508,8 @@ class ABService:
             temporal_note=row.temporal_note, position=row.position,
             created_at=row.created_at, updated_at=row.updated_at,
             evidence=evidence, counterarguments=counterarguments,
+            linked_investigation_id=linked_inv_id,
+            linked_investigation=linked_investigation,
         )
 
     async def create_claim(self, inv_slug: str, data: ABClaimCreate) -> ABClaim:
@@ -511,15 +523,18 @@ class ABService:
         self.db.execute(
             text("""
                 INSERT INTO ab_claims (investigation_id, title, slug, claim_text, exposition_html,
-                                       status, temporal_note, position, created_at, updated_at)
+                                       status, temporal_note, position, created_at, updated_at,
+                                       linked_investigation_id)
                 VALUES (:inv_id, :title, :slug, :claim_text, :exposition_html,
-                        :status, :temporal_note, :position, :created_at, :updated_at)
+                        :status, :temporal_note, :position, :created_at, :updated_at,
+                        :linked_investigation_id)
             """),
             {
                 "inv_id": inv_id, "title": data.title, "slug": slug,
                 "claim_text": data.claim_text, "exposition_html": data.exposition_html,
                 "status": data.status.value, "temporal_note": data.temporal_note,
                 "position": data.position, "created_at": now, "updated_at": now,
+                "linked_investigation_id": data.linked_investigation_id,
             }
         )
         self.db.commit()
@@ -561,6 +576,10 @@ class ABService:
         if data.position is not None:
             updates.append("position = :position")
             params["position"] = data.position
+        # linked_investigation_id supports explicit null (to unlink), so check model_fields_set
+        if 'linked_investigation_id' in data.model_fields_set:
+            updates.append("linked_investigation_id = :linked_investigation_id")
+            params["linked_investigation_id"] = data.linked_investigation_id
 
         if updates:
             updates.append("updated_at = :updated_at")
@@ -607,15 +626,16 @@ class ABService:
 
         now = datetime.utcnow()
         anchor_data = json.dumps(data.source_anchor_data) if data.source_anchor_data else None
+        supporting_quotes = json.dumps([sq.model_dump() for sq in data.supporting_quotes]) if data.supporting_quotes else None
 
         result = self.db.execute(
             text("""
                 INSERT INTO ab_evidence (claim_id, kb_resource_id, source_title, source_url,
                                          source_type, key_quote, key_point, position, created_at,
-                                         source_anchor_type, source_anchor_data)
+                                         source_anchor_type, source_anchor_data, supporting_quotes)
                 VALUES (:claim_id, :kb_resource_id, :source_title, :source_url,
                         :source_type, :key_quote, :key_point, :position, :created_at,
-                        :source_anchor_type, :source_anchor_data)
+                        :source_anchor_type, :source_anchor_data, :supporting_quotes)
                 RETURNING id
             """),
             {
@@ -625,6 +645,7 @@ class ABService:
                 "key_point": data.key_point, "position": data.position,
                 "created_at": now, "source_anchor_type": data.source_anchor_type,
                 "source_anchor_data": anchor_data,
+                "supporting_quotes": supporting_quotes,
             }
         )
         ev_id = result.fetchone()[0]
@@ -670,6 +691,9 @@ class ABService:
         if data.source_anchor_data is not None:
             updates.append("source_anchor_data = :source_anchor_data")
             params["source_anchor_data"] = json.dumps(data.source_anchor_data)
+        if data.supporting_quotes is not None:
+            updates.append("supporting_quotes = :supporting_quotes")
+            params["supporting_quotes"] = json.dumps([sq.model_dump() for sq in data.supporting_quotes])
 
         if updates:
             self.db.execute(
@@ -807,6 +831,19 @@ class ABService:
             raise InvestigationNotFoundError(f"Investigation '{slug}' not found")
         return row.id
 
+    async def _resolve_linked_investigation(self, linked_id: Optional[int]) -> Optional[LinkedInvestigationRef]:
+        """Fetch minimal investigation info for a linked_investigation_id, or return None."""
+        if not linked_id:
+            return None
+        from sqlalchemy import text
+        row = self.db.execute(
+            text("SELECT id, title, slug FROM ab_investigations WHERE id = :id"),
+            {"id": linked_id}
+        ).fetchone()
+        if not row:
+            return None
+        return LinkedInvestigationRef(id=row.id, title=row.title, slug=row.slug)
+
     async def _get_evidence_for_claim(self, claim_id: int) -> List[ABEvidence]:
         """Get all evidence for a claim."""
         from sqlalchemy import text
@@ -825,6 +862,7 @@ class ABService:
                 created_at=e.created_at,
                 source_anchor_type=e.source_anchor_type,
                 source_anchor_data=_parse_json_field(e.source_anchor_data),
+                supporting_quotes=_parse_json_field(getattr(e, 'supporting_quotes', None)),
             )
             for e in rows
         ]
@@ -849,6 +887,7 @@ class ABService:
             created_at=row.created_at,
             source_anchor_type=row.source_anchor_type,
             source_anchor_data=_parse_json_field(row.source_anchor_data),
+            supporting_quotes=_parse_json_field(getattr(row, 'supporting_quotes', None)),
         )
 
     async def _get_counterarguments_for_claim(self, claim_id: int) -> List[Counterargument]:

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import {
   ArrowLeft, FileText, BookOpen, Clock, CheckCircle,
@@ -86,7 +86,6 @@ const indexStatusConfig: Record<string, { icon: any; color: string; label: strin
 
 export default function ResourceDetailPage() {
   const params = useParams();
-  const router = useRouter();
   const resourceId = Number(params.id);
 
   const [resource, setResource] = useState<Resource | null>(null);
@@ -265,12 +264,9 @@ export default function ResourceDetailPage() {
         <div className="text-center">
           <AlertCircle className="w-12 h-12 text-red-400 mx-auto mb-4" />
           <p className="text-slate-700 mb-4">{error || 'Resource not found'}</p>
-          <button
-            onClick={() => router.back()}
-            className="text-indigo-600 hover:underline"
-          >
-            ← Go back
-          </button>
+          <Link href="/knowledge" className="text-indigo-600 hover:underline">
+            ← Knowledge Base
+          </Link>
         </div>
       </div>
     );
@@ -285,13 +281,15 @@ export default function ResourceDetailPage() {
       <header className="bg-white border-b border-slate-200 sticky top-0 z-10">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
-            <div className="flex items-center gap-4">
-              <button
-                onClick={() => router.back()}
-                className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg"
+            <div className="flex items-center gap-2">
+              <Link
+                href={`/knowledge/${resource.collection_id}`}
+                className="flex items-center gap-1 text-slate-500 hover:text-slate-700 transition-colors"
               >
-                <ArrowLeft className="w-5 h-5" />
-              </button>
+                <ArrowLeft className="w-4 h-4" />
+                <span className="text-sm">Knowledge Base</span>
+              </Link>
+              <span className="text-slate-300">/</span>
               <div>
                 <h1 className="text-lg font-semibold text-slate-900 truncate max-w-md">
                   {resource.name}

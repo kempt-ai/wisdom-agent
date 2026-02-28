@@ -19,6 +19,7 @@ import {
   DollarSign,
   AlertTriangle,
   Database,
+  Scale,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getProjects, type Project } from '@/lib/api';
@@ -203,6 +204,11 @@ export function Sidebar({ className }: SidebarProps) {
       name: 'Knowledge Base',
       href: '/knowledge',
       icon: Database,
+    },
+    {
+      name: 'Investigations',
+      href: '/investigations',
+      icon: Scale,
     },
     {
       name: 'Projects',

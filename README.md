@@ -28,19 +28,35 @@ Wisdom Agent is designed as a three-layer system:
 - Cost estimation for indexing operations
 - Project-level organization
 - **Resource parsing** - Extract structured arguments from articles (thesis, claims, evidence)
+- Multiple parse levels: Light (quick overview), Standard (balanced), Full (comprehensive)
 
-*Status: Backend fully functional. Frontend interface functional, parsing feature working.*
+*Status: Fully functional with parsing capabilities.*
 
-### Argument Builder (In Development)
+### Investigation Builder ✨ NEW
 
-Transform Knowledge Base resources into structured, navigable investigations. The Argument Builder enables:
+Build structured, navigable arguments from your research. The Investigation Builder transforms Knowledge Base resources into comprehensive investigations:
 
-- **Readable prose with embedded links** - Investigations read naturally, with terms and claims linked to deeper explanations
-- **Structured claim pages** - Each claim has exposition, evidence, and counterarguments
-- **Source credibility tracking** - Evaluate and document the reliability of sources
-- **Threaded evidence** - Every snippet links back to its exact source location
+#### Core Features
+- **Readable prose with embedded links** - Investigations read naturally, with colored links to definitions (blue) and claims (orange)
+- **Slide-out panel navigation** - Click any link to see details without losing context
+- **Hierarchical arguments** - Claims can link to sub-investigations for complex argument trees
+- **Rich evidence with supporting quotes** - Capture not just one quote, but the full context including examples and data
 
-*Status: Design complete. Resource parsing (Phase 1) working. Full AB implementation in progress.*
+#### Knowledge Base Integration
+- **Search KB from evidence editor** - Find and link resources without leaving your investigation
+- **Browse parsed content** - Select specific claims, quotes, or examples from parsed articles
+- **Auto-fill evidence fields** - Selecting parsed content populates the evidence form automatically
+- **Supporting quotes bundled** - When you select a claim, its supporting evidence comes with it
+- **"View in parse" links** - Click through from evidence back to the exact location in the source
+- **Auto-add to KB** - Add new sources to your Knowledge Base while creating evidence
+
+#### Content Management
+- Create and edit investigations, definitions, claims, and evidence through the UI
+- Clickable definition and claim cards
+- Status tracking (ongoing, resolved, historical, superseded)
+- Evidence credibility metadata (source type, key quotes, key points)
+
+*Status: Core features complete. Counterarguments, reordering, and credibility assessment in progress.*
 
 See [ARGUMENT_BUILDER_DESIGN.md](./ARGUMENT_BUILDER_DESIGN.md) for full specification.
 
@@ -181,7 +197,8 @@ wisdom-agent/
 │   ├── routers/             # API endpoints
 │   │   ├── review_router.py      # Fact/Logic/Wisdom checker (hidden from UI)
 │   │   ├── knowledge.py          # Knowledge base
-│   │   ├── arguments.py          # Argument builder & resource parsing
+│   │   ├── arguments.py          # Resource parsing
+│   │   ├── ab_router.py          # Investigation Builder API
 │   │   ├── chat.py               # Chat sessions
 │   │   ├── sessions.py           # Session management
 │   │   └── spending.py           # Budget tracking
@@ -193,6 +210,7 @@ wisdom-agent/
 │   │   ├── claim_extraction_service.py  # Claim extraction
 │   │   ├── knowledge_service.py       # Knowledge base
 │   │   ├── parsing_service.py         # Resource parsing for arguments
+│   │   ├── ab_service.py              # Investigation Builder logic
 │   │   ├── reflection_service.py      # Session reflections
 │   │   ├── llm_router.py              # Multi-LLM routing
 │   │   └── web_search_service.py      # Web search
@@ -201,19 +219,36 @@ wisdom-agent/
 │   │   ├── google_factcheck.py   # Google Fact Check API
 │   │   └── claimbuster.py        # ClaimBuster API
 │   ├── database/            # DB models and connections
-│   │   └── argument_models.py    # Parsing & argument data models
+│   │   ├── argument_tables.py    # Parsing data models
+│   │   └── ab_tables.py          # Investigation Builder tables
 │   └── models/              # Pydantic request/response models
-│       └── argument_models.py    # Argument schemas
+│       ├── argument_models.py    # Parsing schemas
+│       └── ab_schemas.py         # Investigation Builder schemas
 ├── frontend/
 │   └── src/
 │       ├── app/             # Next.js pages
 │       │   ├── (dashboard)/ # Main app pages
 │       │   │   ├── fact-checker/   # F/L/W Checker UI (hidden)
 │       │   │   ├── knowledge/      # Knowledge Base UI
+│       │   │   ├── investigations/ # Investigation Builder UI
 │       │   │   └── chat/           # Chat interface
 │       │   └── page.tsx     # Landing page
 │       ├── components/      # React components
+│       │   └── arguments/   # Investigation Builder components
+│       │       ├── InvestigationOverview.tsx
+│       │       ├── SlideOutPanel.tsx
+│       │       ├── DefinitionView.tsx
+│       │       ├── DefinitionEditor.tsx
+│       │       ├── ClaimView.tsx
+│       │       ├── ClaimEditor.tsx
+│       │       ├── EvidenceCard.tsx
+│       │       ├── EvidenceEditor.tsx
+│       │       ├── KBResourcePicker.tsx
+│       │       └── InvestigationEditor.tsx
 │       └── lib/             # Utilities and API client
+│           ├── api.ts
+│           ├── knowledge-api.ts
+│           └── arguments-api.ts
 ├── data/
 │   └── philosophy/          # Philosophy text files
 │       └── base/            # Core philosophy documents
@@ -235,7 +270,7 @@ wisdom-agent/
 
 ### Frontend not updating
 - Stop and restart: `npm run dev`
-- Clear browser cache or use incognito mode
+- Clear Next.js cache: `rm -rf frontend/.next && npm run dev`
 - Check for TypeScript errors in terminal
 
 ### Pydantic namespace warnings
@@ -257,12 +292,20 @@ This is cosmetic and can be ignored.
 - Chat with wisdom grounding
 - Budget tracking and spending limits
 - Session summaries and 7 Values reflections
-- Knowledge Base (backend complete, frontend functional)
+- Knowledge Base with resource parsing
 - Project-based organization
-- Resource parsing into structured arguments
+- **Investigation Builder** - Core features complete:
+  - Investigations with definitions and claims
+  - Slide-out panel navigation
+  - Rich evidence with supporting quotes
+  - KB integration (search, browse parses, auto-add)
+  - Sub-investigation linking for hierarchical arguments
+  - "View in parse" links for source traceability
 
 ### In Progress 🔄
-- **Argument Builder** - Full implementation (design complete, Phase 1 done)
+- **Counterarguments & Rebuttals** - Add objections and responses to claims
+- **Claim/Evidence reordering** - Drag or arrow-based reorganization
+- **Source credibility assessment** - User checklist + AI-assisted evaluation
 - Knowledge Base frontend polish
 - Session reflection integration across all activities
 
@@ -274,6 +317,7 @@ This is cosmetic and can be ignored.
 - Genre-aware F/L/W analysis standards
 - Memory integration for KB activities
 - Collaborative editing and version control
+- Temporal versioning for investigations
 - Democracy tools and election monitoring (long-term)
 
 ## 🤝 Contributing
@@ -288,6 +332,7 @@ This is an open-source project welcoming contributions. Please:
 6. Submit a pull request
 
 ### Development Principles
+- **Surgical changes only** - Don't rewrite files, make targeted edits
 - **View before modify** - Always check existing code first
 - **Trace bugs to source** - Don't guess, investigate
 - **Check callers before callees** - Bug often in how something is called

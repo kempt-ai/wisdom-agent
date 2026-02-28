@@ -1151,23 +1151,25 @@ class KnowledgeBaseService:
         placeholders = ','.join(['?' for _ in collection_ids])
         
         # Search summaries and text content
+        # Use ILIKE for case-insensitive matching on PostgreSQL
         search_query = f"""
             SELECT r.id, r.name, r.resource_type, r.collection_id, c.name as collection_name,
-                   ri.index_type, ri.text_content, ri.content
+                   ri.index_type, ri.text_content, r.original_content
             FROM knowledge_resources r
             JOIN knowledge_collections c ON c.id = r.collection_id
             LEFT JOIN resource_indexes ri ON ri.resource_id = r.id
             WHERE r.collection_id IN ({placeholders})
             AND r.user_id = ?
             AND (
-                r.name LIKE ? 
-                OR r.description LIKE ?
-                OR ri.text_content LIKE ?
+                r.name ILIKE ?
+                OR r.description ILIKE ?
+                OR ri.text_content ILIKE ?
+                OR r.original_content ILIKE ?
             )
         """
-        
+
         search_term = f"%{query.query}%"
-        params = collection_ids + [user_id, search_term, search_term, search_term]
+        params = collection_ids + [user_id, search_term, search_term, search_term, search_term]
         
         if query.resource_types:
             type_placeholders = ','.join(['?' for _ in query.resource_types])
@@ -1190,6 +1192,27 @@ class KnowledgeBaseService:
             # Calculate simple relevance score
             relevance = self._calculate_relevance(query.query, row)
             
+            # Use index text_content first, fall back to original_content snippet
+            matched_text = None
+            if row[6]:
+                matched_text = row[6][:200]
+            elif row[7]:
+                # Extract a snippet around the match from original_content
+                content_lower = row[7].lower()
+                query_lower = query.query.lower()
+                pos = content_lower.find(query_lower)
+                if pos >= 0:
+                    start = max(0, pos - 80)
+                    end = min(len(row[7]), pos + len(query.query) + 120)
+                    snippet = row[7][start:end].strip()
+                    if start > 0:
+                        snippet = '...' + snippet
+                    if end < len(row[7]):
+                        snippet = snippet + '...'
+                    matched_text = snippet
+                else:
+                    matched_text = row[7][:200]
+
             results.append(SearchResult(
                 resource_id=resource_id,
                 resource_name=row[1],
@@ -1198,7 +1221,7 @@ class KnowledgeBaseService:
                 collection_name=row[4],
                 match_type="keyword",
                 relevance_score=relevance,
-                matched_text=row[6][:200] if row[6] else None,
+                matched_text=matched_text,
                 index_type=IndexType(row[5]) if row[5] else None
             ))
         
@@ -1218,17 +1241,22 @@ class KnowledgeBaseService:
         """Calculate simple relevance score"""
         score = 0.0
         query_lower = query.lower()
-        
+
         # Name match (high weight)
         if row[1] and query_lower in row[1].lower():
             score += 0.5
-        
-        # Content match
+
+        # Index text_content match
         if row[6] and query_lower in row[6].lower():
             score += 0.3
             # Bonus for multiple matches
             score += min(0.2, row[6].lower().count(query_lower) * 0.02)
-        
+
+        # Original content match (fallback when no index text)
+        if not row[6] and row[7] and query_lower in row[7].lower():
+            score += 0.2
+            score += min(0.1, row[7].lower().count(query_lower) * 0.01)
+
         return min(1.0, score)
     
     # ========================================================================

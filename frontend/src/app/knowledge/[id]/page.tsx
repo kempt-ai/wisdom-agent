@@ -117,13 +117,15 @@ export default function CollectionDetailPage() {
       <header className="bg-white border-b border-slate-200 sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
-            <div className="flex items-center gap-4">
-              <Link 
+            <div className="flex items-center gap-2">
+              <Link
                 href="/knowledge"
-                className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg"
+                className="flex items-center gap-1 text-slate-500 hover:text-slate-700 transition-colors"
               >
-                <ArrowLeft className="w-5 h-5" />
+                <ArrowLeft className="w-4 h-4" />
+                <span className="text-sm">Knowledge Base</span>
               </Link>
+              <span className="text-slate-300">/</span>
               <div>
                 <h1 className="text-xl font-semibold text-slate-900">{collection.name}</h1>
                 <p className="text-sm text-slate-500">

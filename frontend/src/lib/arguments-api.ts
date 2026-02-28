@@ -78,6 +78,12 @@ export interface Definition {
   updated_at: string;
 }
 
+export interface LinkedInvestigationRef {
+  id: number;
+  title: string;
+  slug: string;
+}
+
 export interface ABClaim {
   id: number;
   investigation_id: number;
@@ -92,6 +98,14 @@ export interface ABClaim {
   updated_at: string;
   evidence: ABEvidence[];
   counterarguments: Counterargument[];
+  linked_investigation_id: number | null;
+  linked_investigation: LinkedInvestigationRef | null;
+}
+
+export interface SupportingQuote {
+  quote_type: string;  // "quote" | "example" | "data" | "statistic" | "citation" | "testimony"
+  content: string;
+  outline_node_id?: string;  // e.g. "evidence-98"
 }
 
 export interface ABEvidence {
@@ -107,6 +121,7 @@ export interface ABEvidence {
   created_at: string;
   source_anchor_type: string | null;
   source_anchor_data: Record<string, any> | null;
+  supporting_quotes: SupportingQuote[] | null;
 }
 
 export interface Counterargument {
@@ -117,6 +132,80 @@ export interface Counterargument {
   position: number;
   created_at: string;
 }
+
+// ============================================
+// Types for KB parsed content
+// ============================================
+
+/** A parse run stored for a KB resource */
+export interface ResourceParse {
+  id: number;
+  parse_level: 'light' | 'standard' | 'full';
+  parser_model: string;
+  parsed_at: string;
+  main_thesis: string | null;
+  cost_dollars: number;
+  claim_count: number;
+}
+
+export interface ResourceParsesResponse {
+  resource_id: number;
+  parses: ResourceParse[];
+}
+
+/** A claim extracted during parsing */
+export interface ParsedClaim {
+  id: number;
+  parsed_resource_id: number;
+  claim_text: string;
+  claim_type: 'factual' | 'interpretive' | 'prescriptive';
+  context: string | null;
+  source_quote: string | null;
+  argument_title: string | null;
+  confidence: number;
+  position_in_doc: number | null;
+  parent_claim_id: number | null;
+  verification_status: string | null;
+  evidence: ParsedEvidence[];
+  sub_claims: ParsedClaim[];
+  created_at: string;
+}
+
+export interface ParsedEvidence {
+  id: number;
+  claim_id: number;
+  evidence_type: string;
+  content: string;
+  source_url: string | null;
+  source_title: string | null;
+  position: number;
+  created_at: string;
+}
+
+/** A node in the parsed resource outline tree */
+export interface OutlineNode {
+  id: string;
+  node_type: 'argument' | 'evidence';
+  title: string;
+  content?: string;
+  claim_type?: 'factual' | 'interpretive' | 'prescriptive' | null;
+  verification_status?: string | null;
+  source_url?: string | null;
+  children?: OutlineNode[];
+  metadata?: Record<string, unknown>;
+}
+
+export interface OutlineResponse {
+  parsed_resource_id: number;
+  resource_id: number;
+  resource_name: string;
+  main_thesis: string | null;
+  summary: string | null;
+  outline: OutlineNode[];
+}
+
+// The arguments/parsing endpoints use /api/arguments prefix (not /api/ab)
+const ARGS_PREFIX = '/api/arguments';
 
 // ============================================
 // API Functions
@@ -220,6 +309,7 @@ export const argumentsApi = {
     status?: string;
     temporal_note?: string;
     position?: number;
+    linked_investigation_id?: number | null;
   }): Promise<ABClaim> {
     return fetchAPI<ABClaim>(
       `${AB_PREFIX}/investigations/${encodeURIComponent(slug)}/claims`,
@@ -234,6 +324,7 @@ export const argumentsApi = {
     status?: string;
     temporal_note?: string;
     position?: number;
+    linked_investigation_id?: number | null;
   }): Promise<ABClaim> {
     return fetchAPI<ABClaim>(
       `${AB_PREFIX}/investigations/${encodeURIComponent(slug)}/claims/${encodeURIComponent(claimSlug)}`,
@@ -253,6 +344,9 @@ export const argumentsApi = {
     key_point?: string;
     kb_resource_id?: number;
     position?: number;
+    source_anchor_type?: string;
+    source_anchor_data?: Record<string, any>;
+    supporting_quotes?: SupportingQuote[];
   }): Promise<ABEvidence> {
     return fetchAPI<ABEvidence>(
       `${AB_PREFIX}/claims/${claimId}/evidence`,
@@ -267,10 +361,35 @@ export const argumentsApi = {
     key_quote?: string;
     key_point?: string;
     position?: number;
+    source_anchor_type?: string;
+    source_anchor_data?: Record<string, any>;
+    supporting_quotes?: SupportingQuote[];
   }): Promise<ABEvidence> {
     return fetchAPI<ABEvidence>(
       `${AB_PREFIX}/evidence/${evidenceId}`,
       { method: 'PUT', body: JSON.stringify(data) }
+    );
+  },
+
+  // ----------------------------------------
+  // KB Parsed Content
+  // ----------------------------------------
+
+  async getResourceParses(resourceId: number): Promise<ResourceParsesResponse> {
+    return fetchAPI<ResourceParsesResponse>(
+      `${ARGS_PREFIX}/resource/${resourceId}/parses`
+    );
+  },
+
+  async getParsedClaims(parsedResourceId: number): Promise<ParsedClaim[]> {
+    return fetchAPI<ParsedClaim[]>(
+      `${ARGS_PREFIX}/parsed/${parsedResourceId}/claims`
+    );
+  },
+
+  async getOutline(parsedResourceId: number): Promise<OutlineResponse> {
+    return fetchAPI<OutlineResponse>(
+      `${ARGS_PREFIX}/parsed/${parsedResourceId}/outline`
     );
   },
 };
@@ -292,4 +411,7 @@ export const {
   updateClaim,
   createEvidence,
   updateEvidence,
+  getResourceParses,
+  getParsedClaims,
+  getOutline,
 } = argumentsApi;

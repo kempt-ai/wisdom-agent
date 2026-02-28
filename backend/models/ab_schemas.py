@@ -142,6 +142,13 @@ class Definition(BaseModel):
 # CLAIM MODELS
 # ============================================================================
 
+class LinkedInvestigationRef(BaseModel):
+    """Minimal investigation info embedded in a claim response."""
+    id: int
+    title: str
+    slug: str
+
+
 class ABClaimCreate(BaseModel):
     """Create a claim within an investigation"""
     title: str = Field(..., min_length=1, max_length=500)
@@ -150,6 +157,7 @@ class ABClaimCreate(BaseModel):
     status: ClaimStatus = ClaimStatus.ONGOING
     temporal_note: Optional[str] = None
     position: int = 0
+    linked_investigation_id: Optional[int] = None
 
 
 class ABClaimUpdate(BaseModel):
@@ -160,6 +168,7 @@ class ABClaimUpdate(BaseModel):
     status: Optional[ClaimStatus] = None
     temporal_note: Optional[str] = None
     position: Optional[int] = None
+    linked_investigation_id: Optional[int] = None
 
 
 class ABClaim(BaseModel):
@@ -177,11 +186,20 @@ class ABClaim(BaseModel):
     updated_at: datetime
     evidence: List["ABEvidence"] = []
     counterarguments: List["Counterargument"] = []
+    linked_investigation_id: Optional[int] = None
+    linked_investigation: Optional[LinkedInvestigationRef] = None
 
 
 # ============================================================================
 # EVIDENCE MODELS
 # ============================================================================
+
+class SupportingQuote(BaseModel):
+    """A supporting quote collected from a parsed outline child node."""
+    quote_type: str  # "quote", "example", "data", "statistic", "citation", "testimony"
+    content: str
+    outline_node_id: Optional[str] = None  # e.g. "evidence-98"
+
 
 class ABEvidenceCreate(BaseModel):
     """Add evidence to a claim"""
@@ -194,6 +212,7 @@ class ABEvidenceCreate(BaseModel):
     position: int = 0
     source_anchor_type: Optional[str] = None
     source_anchor_data: Optional[Dict[str, Any]] = None
+    supporting_quotes: Optional[List[SupportingQuote]] = None
 
 
 class ABEvidenceUpdate(BaseModel):
@@ -206,6 +225,7 @@ class ABEvidenceUpdate(BaseModel):
     position: Optional[int] = None
     source_anchor_type: Optional[str] = None
     source_anchor_data: Optional[Dict[str, Any]] = None
+    supporting_quotes: Optional[List[SupportingQuote]] = None
 
 
 class ABEvidence(BaseModel):
@@ -222,6 +242,7 @@ class ABEvidence(BaseModel):
     created_at: datetime
     source_anchor_type: Optional[str] = None
     source_anchor_data: Optional[Dict[str, Any]] = None
+    supporting_quotes: Optional[List[SupportingQuote]] = None
 
 
 # ============================================================================

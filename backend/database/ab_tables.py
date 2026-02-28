@@ -89,7 +89,8 @@ CREATE TABLE IF NOT EXISTS ab_evidence (
     position INTEGER DEFAULT 0,
     created_at TIMESTAMP DEFAULT NOW(),
     source_anchor_type VARCHAR(50),
-    source_anchor_data JSONB
+    source_anchor_data JSONB,
+    supporting_quotes JSONB
 );
 
 CREATE INDEX IF NOT EXISTS idx_ab_ev_claim ON ab_evidence(claim_id);
@@ -241,7 +242,8 @@ CREATE TABLE IF NOT EXISTS ab_evidence (
     position INTEGER DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     source_anchor_type VARCHAR(50),
-    source_anchor_data TEXT
+    source_anchor_data TEXT,
+    supporting_quotes TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_ab_ev_claim ON ab_evidence(claim_id);
@@ -382,3 +384,60 @@ def drop_ab_tables(connection):
             print(f"Warning: Could not drop {table}: {e}")
 
     print("Investigation Builder tables dropped")
+
+
+def migrate_add_linked_investigation(connection, use_postgres: bool = True):
+    """Add linked_investigation_id column to ab_claims if it doesn't exist (for existing databases)."""
+    from sqlalchemy import text
+
+    try:
+        if use_postgres:
+            connection.execute(text(
+                "ALTER TABLE ab_claims ADD COLUMN IF NOT EXISTS "
+                "linked_investigation_id INTEGER REFERENCES ab_investigations(id) ON DELETE SET NULL"
+            ))
+        else:
+            # SQLite: check if column exists first
+            result = connection.execute(text("PRAGMA table_info(ab_claims)")).fetchall()
+            columns = [row[1] for row in result]
+            if 'linked_investigation_id' not in columns:
+                connection.execute(text(
+                    "ALTER TABLE ab_claims ADD COLUMN linked_investigation_id INTEGER"
+                ))
+        connection.commit()
+    except Exception as e:
+        try:
+            connection.rollback()
+        except Exception:
+            pass
+        # Ignore "already exists" errors
+        if 'already exists' not in str(e).lower() and 'duplicate' not in str(e).lower():
+            print(f"Warning: Could not add linked_investigation_id column: {e}")
+
+
+def migrate_add_supporting_quotes(connection, use_postgres: bool = True):
+    """Add supporting_quotes column to ab_evidence if it doesn't exist (for existing databases)."""
+    from sqlalchemy import text
+
+    try:
+        if use_postgres:
+            connection.execute(text(
+                "ALTER TABLE ab_evidence ADD COLUMN IF NOT EXISTS supporting_quotes JSONB"
+            ))
+        else:
+            # SQLite: check if column exists first
+            result = connection.execute(text("PRAGMA table_info(ab_evidence)")).fetchall()
+            columns = [row[1] for row in result]
+            if 'supporting_quotes' not in columns:
+                connection.execute(text(
+                    "ALTER TABLE ab_evidence ADD COLUMN supporting_quotes TEXT"
+                ))
+        connection.commit()
+    except Exception as e:
+        try:
+            connection.rollback()
+        except Exception:
+            pass
+        # Ignore "already exists" errors
+        if 'already exists' not in str(e).lower() and 'duplicate' not in str(e).lower():
+            print(f"Warning: Could not add supporting_quotes column: {e}")
