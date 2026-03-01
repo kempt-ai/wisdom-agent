@@ -371,6 +371,58 @@ export const argumentsApi = {
     );
   },
 
+  async reorderClaim(claimId: number, direction: 'up' | 'down'): Promise<void> {
+    await fetchAPI(
+      `${AB_PREFIX}/claims/${claimId}/reorder?direction=${direction}`,
+      { method: 'POST' }
+    );
+  },
+
+  async reorderEvidence(evidenceId: number, direction: 'up' | 'down'): Promise<void> {
+    await fetchAPI(
+      `${AB_PREFIX}/evidence/${evidenceId}/reorder?direction=${direction}`,
+      { method: 'POST' }
+    );
+  },
+
+  // ----------------------------------------
+  // Counterarguments
+  // ----------------------------------------
+
+  async createCounterargument(claimId: number, data: {
+    counter_text: string;
+    rebuttal_text?: string;
+  }): Promise<Counterargument> {
+    return fetchAPI<Counterargument>(
+      `${AB_PREFIX}/claims/${claimId}/counterarguments`,
+      { method: 'POST', body: JSON.stringify(data) }
+    );
+  },
+
+  async updateCounterargument(caId: number, data: {
+    counter_text?: string;
+    rebuttal_text?: string;
+  }): Promise<Counterargument> {
+    return fetchAPI<Counterargument>(
+      `${AB_PREFIX}/counterarguments/${caId}`,
+      { method: 'PUT', body: JSON.stringify(data) }
+    );
+  },
+
+  async deleteCounterargument(caId: number): Promise<void> {
+    await fetchAPI(
+      `${AB_PREFIX}/counterarguments/${caId}`,
+      { method: 'DELETE' }
+    );
+  },
+
+  async reorderCounterargument(caId: number, direction: 'up' | 'down'): Promise<void> {
+    await fetchAPI(
+      `${AB_PREFIX}/counterarguments/${caId}/reorder?direction=${direction}`,
+      { method: 'POST' }
+    );
+  },
+
   // ----------------------------------------
   // KB Parsed Content
   // ----------------------------------------

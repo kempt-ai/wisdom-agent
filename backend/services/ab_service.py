@@ -519,6 +519,13 @@ class ABService:
         inv_id = await self._get_investigation_id(inv_slug)
         slug = _slugify(data.title)
 
+        # Place new claim at the end
+        max_pos_row = self.db.execute(
+            text("SELECT COALESCE(MAX(position), -1) as max_pos FROM ab_claims WHERE investigation_id = :inv_id"),
+            {"inv_id": inv_id}
+        ).fetchone()
+        position = max_pos_row.max_pos + 1
+
         now = datetime.utcnow()
         self.db.execute(
             text("""
@@ -533,7 +540,7 @@ class ABService:
                 "inv_id": inv_id, "title": data.title, "slug": slug,
                 "claim_text": data.claim_text, "exposition_html": data.exposition_html,
                 "status": data.status.value, "temporal_note": data.temporal_note,
-                "position": data.position, "created_at": now, "updated_at": now,
+                "position": position, "created_at": now, "updated_at": now,
                 "linked_investigation_id": data.linked_investigation_id,
             }
         )
@@ -624,6 +631,13 @@ class ABService:
         if not claim:
             raise ClaimNotFoundError(f"Claim {claim_id} not found")
 
+        # Place new evidence at the end
+        max_pos_row = self.db.execute(
+            text("SELECT COALESCE(MAX(position), -1) as max_pos FROM ab_evidence WHERE claim_id = :claim_id"),
+            {"claim_id": claim_id}
+        ).fetchone()
+        position = max_pos_row.max_pos + 1
+
         now = datetime.utcnow()
         anchor_data = json.dumps(data.source_anchor_data) if data.source_anchor_data else None
         supporting_quotes = json.dumps([sq.model_dump() for sq in data.supporting_quotes]) if data.supporting_quotes else None
@@ -642,7 +656,7 @@ class ABService:
                 "claim_id": claim_id, "kb_resource_id": data.kb_resource_id,
                 "source_title": data.source_title, "source_url": data.source_url,
                 "source_type": data.source_type, "key_quote": data.key_quote,
-                "key_point": data.key_point, "position": data.position,
+                "key_point": data.key_point, "position": position,
                 "created_at": now, "source_anchor_type": data.source_anchor_type,
                 "source_anchor_data": anchor_data,
                 "supporting_quotes": supporting_quotes,
@@ -732,6 +746,13 @@ class ABService:
         if not claim:
             raise ClaimNotFoundError(f"Claim {claim_id} not found")
 
+        # Place new counterargument at the end
+        max_pos_row = self.db.execute(
+            text("SELECT COALESCE(MAX(position), -1) as max_pos FROM ab_counterarguments WHERE claim_id = :claim_id"),
+            {"claim_id": claim_id}
+        ).fetchone()
+        position = max_pos_row.max_pos + 1
+
         now = datetime.utcnow()
         result = self.db.execute(
             text("""
@@ -741,7 +762,7 @@ class ABService:
             """),
             {
                 "claim_id": claim_id, "counter_text": data.counter_text,
-                "rebuttal_text": data.rebuttal_text, "position": data.position,
+                "rebuttal_text": data.rebuttal_text, "position": position,
                 "created_at": now,
             }
         )
@@ -813,6 +834,118 @@ class ABService:
 
         if result.rowcount == 0:
             raise CounterargumentNotFoundError(f"Counterargument {ca_id} not found")
+
+    # ========================================================================
+    # REORDERING
+    # ========================================================================
+
+    async def reorder_claim(self, claim_id: int, direction: str) -> bool:
+        """Move a claim up or down within its investigation. Returns False if already at boundary."""
+        from sqlalchemy import text
+
+        claim_row = self.db.execute(
+            text("SELECT id, investigation_id FROM ab_claims WHERE id = :id"),
+            {"id": claim_id}
+        ).fetchone()
+        if not claim_row:
+            raise ClaimNotFoundError(f"Claim {claim_id} not found")
+
+        rows = self.db.execute(
+            text("SELECT id FROM ab_claims WHERE investigation_id = :inv_id ORDER BY position, id"),
+            {"inv_id": claim_row.investigation_id}
+        ).fetchall()
+        ids = [r.id for r in rows]
+        idx = ids.index(claim_id)
+
+        if direction == 'up':
+            if idx == 0:
+                return False
+            swap_idx = idx - 1
+        else:
+            if idx == len(ids) - 1:
+                return False
+            swap_idx = idx + 1
+
+        ids[idx], ids[swap_idx] = ids[swap_idx], ids[idx]
+        for new_pos, item_id in enumerate(ids):
+            self.db.execute(
+                text("UPDATE ab_claims SET position = :pos WHERE id = :id"),
+                {"pos": new_pos, "id": item_id}
+            )
+        self.db.commit()
+        return True
+
+    async def reorder_evidence(self, evidence_id: int, direction: str) -> bool:
+        """Move an evidence item up or down within its claim. Returns False if already at boundary."""
+        from sqlalchemy import text
+
+        ev_row = self.db.execute(
+            text("SELECT id, claim_id FROM ab_evidence WHERE id = :id"),
+            {"id": evidence_id}
+        ).fetchone()
+        if not ev_row:
+            raise EvidenceNotFoundError(f"Evidence {evidence_id} not found")
+
+        rows = self.db.execute(
+            text("SELECT id FROM ab_evidence WHERE claim_id = :claim_id ORDER BY position, id"),
+            {"claim_id": ev_row.claim_id}
+        ).fetchall()
+        ids = [r.id for r in rows]
+        idx = ids.index(evidence_id)
+
+        if direction == 'up':
+            if idx == 0:
+                return False
+            swap_idx = idx - 1
+        else:
+            if idx == len(ids) - 1:
+                return False
+            swap_idx = idx + 1
+
+        ids[idx], ids[swap_idx] = ids[swap_idx], ids[idx]
+        for new_pos, item_id in enumerate(ids):
+            self.db.execute(
+                text("UPDATE ab_evidence SET position = :pos WHERE id = :id"),
+                {"pos": new_pos, "id": item_id}
+            )
+        self.db.commit()
+        return True
+
+    async def reorder_counterargument(self, ca_id: int, direction: str) -> bool:
+        """Move a counterargument up or down within its claim. Returns False if already at boundary."""
+        from sqlalchemy import text
+
+        ca_row = self.db.execute(
+            text("SELECT id, claim_id FROM ab_counterarguments WHERE id = :id"),
+            {"id": ca_id}
+        ).fetchone()
+        if not ca_row:
+            raise CounterargumentNotFoundError(f"Counterargument {ca_id} not found")
+
+        rows = self.db.execute(
+            text("SELECT id FROM ab_counterarguments WHERE claim_id = :claim_id ORDER BY position, id"),
+            {"claim_id": ca_row.claim_id}
+        ).fetchall()
+        ids = [r.id for r in rows]
+        idx = ids.index(ca_id)
+
+        if direction == 'up':
+            if idx == 0:
+                return False
+            swap_idx = idx - 1
+        else:
+            if idx == len(ids) - 1:
+                return False
+            swap_idx = idx + 1
+
+        ids[idx], ids[swap_idx] = ids[swap_idx], ids[idx]
+        for new_pos, item_id in enumerate(ids):
+            self.db.execute(
+                text("UPDATE ab_counterarguments SET position = :pos WHERE id = :id"),
+                {"pos": new_pos, "id": item_id}
+            )
+        self.db.commit()
+        return True
 
     # ========================================================================
     # PRIVATE HELPERS

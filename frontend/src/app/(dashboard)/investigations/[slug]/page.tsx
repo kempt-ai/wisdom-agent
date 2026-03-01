@@ -13,6 +13,8 @@ import {
   Clock,
   Pencil,
   Plus,
+  ChevronUp,
+  ChevronDown,
 } from 'lucide-react';
 import { argumentsApi, Investigation, Definition, ABClaim } from '@/lib/arguments-api';
 import { InvestigationOverview } from '@/components/arguments/InvestigationOverview';
@@ -45,6 +47,7 @@ export default function InvestigationDetailPage() {
   const [panelLoading, setPanelLoading] = useState(false);
   const [panelError, setPanelError] = useState<string | null>(null);
   const overviewRef = useRef<HTMLDivElement>(null);
+  const [reorderingClaimId, setReorderingClaimId] = useState<number | null>(null);
 
   useEffect(() => {
     if (slug) loadData();
@@ -114,6 +117,20 @@ export default function InvestigationDetailPage() {
       setPanelLoading(false);
     }
   }, [slug]);
+
+  async function handleReorderClaim(e: React.MouseEvent, claimId: number, direction: 'up' | 'down') {
+    e.stopPropagation();
+    if (reorderingClaimId !== null) return;
+    setReorderingClaimId(claimId);
+    try {
+      await argumentsApi.reorderClaim(claimId, direction);
+      await loadData();
+    } catch (err) {
+      console.error('Failed to reorder claim:', err);
+    } finally {
+      setReorderingClaimId(null);
+    }
+  }
 
   function openEditor(mode: PanelMode, data?: Definition | ABClaim) {
     setPanelType(mode);
@@ -314,17 +331,35 @@ export default function InvestigationDetailPage() {
           </div>
           {investigation.claims.length > 0 ? (
             <div className="space-y-2">
-              {investigation.claims.map((claim) => (
+              {investigation.claims.map((claim, idx) => (
                 <div
                   key={claim.id}
                   onClick={() => openClaim(claim.slug)}
                   className="bg-white rounded-lg border border-slate-200 p-4 hover:border-orange-300 transition-colors cursor-pointer"
                 >
                   <div className="flex items-start justify-between gap-3">
-                    <h3 className="font-medium text-orange-600">{claim.title}</h3>
-                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-600 shrink-0">
-                      {claim.status}
-                    </span>
+                    <h3 className="font-medium text-orange-600 flex-1">{claim.title}</h3>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-600">
+                        {claim.status}
+                      </span>
+                      <button
+                        onClick={(e) => handleReorderClaim(e, claim.id, 'up')}
+                        disabled={idx === 0 || reorderingClaimId !== null}
+                        className="p-1 text-slate-400 hover:text-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                        title="Move up"
+                      >
+                        <ChevronUp className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={(e) => handleReorderClaim(e, claim.id, 'down')}
+                        disabled={idx === investigation.claims.length - 1 || reorderingClaimId !== null}
+                        className="p-1 text-slate-400 hover:text-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                        title="Move down"
+                      >
+                        <ChevronDown className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
                   <p className="text-sm text-slate-600 mt-1 line-clamp-2">{claim.claim_text}</p>
                   <div className="flex items-center gap-3 mt-2 text-xs text-slate-400">

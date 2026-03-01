@@ -13,7 +13,7 @@ All endpoints prefixed with /ab/ (set by main.py include_router).
 Follows patterns from knowledge.py and arguments.py routers.
 """
 
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Query
 from typing import List
 import logging
 
@@ -343,6 +343,44 @@ async def delete_evidence(evidence_id: int):
 
 
 # ============================================================================
+# REORDER ENDPOINTS
+# ============================================================================
+
+@router.post("/claims/{claim_id}/reorder", status_code=200)
+async def reorder_claim(
+    claim_id: int,
+    direction: str = Query(..., pattern="^(up|down)$"),
+):
+    """Move a claim up or down within its investigation."""
+    try:
+        service = get_ab_service()
+        moved = await service.reorder_claim(claim_id, direction)
+        return {"moved": moved}
+    except ClaimNotFoundError:
+        raise HTTPException(status_code=404, detail=f"Claim {claim_id} not found")
+    except Exception as e:
+        logger.error(f"Failed to reorder claim: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/evidence/{evidence_id}/reorder", status_code=200)
+async def reorder_evidence(
+    evidence_id: int,
+    direction: str = Query(..., pattern="^(up|down)$"),
+):
+    """Move an evidence item up or down within its claim."""
+    try:
+        service = get_ab_service()
+        moved = await service.reorder_evidence(evidence_id, direction)
+        return {"moved": moved}
+    except EvidenceNotFoundError:
+        raise HTTPException(status_code=404, detail=f"Evidence {evidence_id} not found")
+    except Exception as e:
+        logger.error(f"Failed to reorder evidence: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
 # COUNTERARGUMENT ENDPOINTS
 # ============================================================================
 
@@ -393,6 +431,23 @@ async def delete_counterargument(ca_id: int):
         raise HTTPException(status_code=404, detail=f"Counterargument {ca_id} not found")
     except Exception as e:
         logger.error(f"Failed to delete counterargument: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/counterarguments/{ca_id}/reorder", status_code=200)
+async def reorder_counterargument(
+    ca_id: int,
+    direction: str = Query(..., pattern="^(up|down)$"),
+):
+    """Move a counterargument up or down within its claim."""
+    try:
+        service = get_ab_service()
+        moved = await service.reorder_counterargument(ca_id, direction)
+        return {"moved": moved}
+    except CounterargumentNotFoundError:
+        raise HTTPException(status_code=404, detail=f"Counterargument {ca_id} not found")
+    except Exception as e:
+        logger.error(f"Failed to reorder counterargument: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

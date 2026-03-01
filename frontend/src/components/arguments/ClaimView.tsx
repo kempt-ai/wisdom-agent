@@ -1,11 +1,13 @@
 'use client';
 
 import { useState } from 'react';
-import { MessageSquareQuote, Clock, Shield, Plus, Scale, ArrowRight } from 'lucide-react';
+import { MessageSquareQuote, Clock, Plus, Scale, ArrowRight, ChevronUp, ChevronDown } from 'lucide-react';
 import Link from 'next/link';
-import { ABClaim, ABEvidence } from '@/lib/arguments-api';
+import { ABClaim, ABEvidence, Counterargument, argumentsApi } from '@/lib/arguments-api';
 import { EvidenceCard } from '@/components/arguments/EvidenceCard';
 import { EvidenceEditor } from '@/components/arguments/EvidenceEditor';
+import { CounterargumentEditor } from '@/components/arguments/CounterargumentEditor';
+import { CounterargumentCard } from '@/components/arguments/CounterargumentCard';
 
 interface ClaimViewProps {
   claim: ABClaim;
@@ -29,6 +31,47 @@ export function ClaimView({ claim, onAddEvidence }: ClaimViewProps) {
   const status = statusConfig[claim.status] || statusConfig.ongoing;
   const [showEvidenceEditor, setShowEvidenceEditor] = useState(false);
   const [localEvidence, setLocalEvidence] = useState<ABEvidence[]>(claim.evidence);
+  const [reorderingEvidenceId, setReorderingEvidenceId] = useState<number | null>(null);
+  const [showCounterargumentEditor, setShowCounterargumentEditor] = useState(false);
+  const [localCounterarguments, setLocalCounterarguments] = useState<Counterargument[]>(claim.counterarguments);
+  const [reorderingCaId, setReorderingCaId] = useState<number | null>(null);
+
+  async function handleReorderCounterargument(caId: number, direction: 'up' | 'down', idx: number) {
+    if (reorderingCaId !== null) return;
+    setReorderingCaId(caId);
+    try {
+      await argumentsApi.reorderCounterargument(caId, direction);
+      setLocalCounterarguments((prev) => {
+        const next = [...prev];
+        const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
+        [next[idx], next[swapIdx]] = [next[swapIdx], next[idx]];
+        return next;
+      });
+    } catch (err) {
+      console.error('Failed to reorder counterargument:', err);
+    } finally {
+      setReorderingCaId(null);
+    }
+  }
+
+  async function handleReorderEvidence(evidenceId: number, direction: 'up' | 'down', idx: number) {
+    if (reorderingEvidenceId !== null) return;
+    setReorderingEvidenceId(evidenceId);
+    try {
+      await argumentsApi.reorderEvidence(evidenceId, direction);
+      // Optimistic update: swap in local state to match server
+      setLocalEvidence((prev) => {
+        const next = [...prev];
+        const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
+        [next[idx], next[swapIdx]] = [next[swapIdx], next[idx]];
+        return next;
+      });
+    } catch (err) {
+      console.error('Failed to reorder evidence:', err);
+    } finally {
+      setReorderingEvidenceId(null);
+    }
+  }
 
   return (
     <div>
@@ -124,8 +167,30 @@ export function ClaimView({ claim, onAddEvidence }: ClaimViewProps) {
 
         {localEvidence.length > 0 ? (
           <div className="space-y-3">
-            {localEvidence.map((ev) => (
-              <EvidenceCard key={ev.id} evidence={ev} />
+            {localEvidence.map((ev, idx) => (
+              <div key={ev.id} className="flex items-start gap-1">
+                <div className="flex flex-col gap-0.5 pt-1 shrink-0">
+                  <button
+                    onClick={() => handleReorderEvidence(ev.id, 'up', idx)}
+                    disabled={idx === 0 || reorderingEvidenceId !== null}
+                    className="p-0.5 text-slate-300 hover:text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                    title="Move up"
+                  >
+                    <ChevronUp className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={() => handleReorderEvidence(ev.id, 'down', idx)}
+                    disabled={idx === localEvidence.length - 1 || reorderingEvidenceId !== null}
+                    className="p-0.5 text-slate-300 hover:text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                    title="Move down"
+                  >
+                    <ChevronDown className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <EvidenceCard evidence={ev} />
+                </div>
+              </div>
             ))}
           </div>
         ) : (
@@ -133,28 +198,56 @@ export function ClaimView({ claim, onAddEvidence }: ClaimViewProps) {
         )}
       </div>
 
-      {/* Counterarguments placeholder */}
+      {/* Counterarguments & Rebuttals */}
       <div>
-        <h4 className="text-sm font-medium text-slate-400 uppercase tracking-wider mb-2">
-          Counterarguments & Rebuttals
-        </h4>
-        {claim.counterarguments.length > 0 ? (
+        <div className="flex items-center justify-between mb-2">
+          <h4 className="text-sm font-medium text-slate-400 uppercase tracking-wider">
+            Counterarguments ({localCounterarguments.length})
+          </h4>
+          {!showCounterargumentEditor && (
+            <button
+              onClick={() => setShowCounterargumentEditor(true)}
+              className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium text-indigo-600 border border-indigo-200 rounded hover:bg-indigo-50 transition-colors"
+            >
+              <Plus className="w-3 h-3" />
+              Add
+            </button>
+          )}
+        </div>
+
+        {/* Inline counterargument editor */}
+        {showCounterargumentEditor && (
+          <div className="mb-3 bg-slate-50 rounded-lg border border-slate-200 p-4">
+            <CounterargumentEditor
+              claimId={claim.id}
+              onSaved={(ca) => {
+                setLocalCounterarguments((prev) => [...prev, ca]);
+                setShowCounterargumentEditor(false);
+              }}
+              onCancel={() => setShowCounterargumentEditor(false)}
+            />
+          </div>
+        )}
+
+        {localCounterarguments.length > 0 ? (
           <div className="space-y-2">
-            {claim.counterarguments.map((ca) => (
-              <div
+            {localCounterarguments.map((ca, idx) => (
+              <CounterargumentCard
                 key={ca.id}
-                className="bg-slate-50 rounded-lg border border-slate-200 p-3"
-              >
-                <div className="flex items-center gap-2 text-sm font-medium text-slate-700">
-                  <Shield className="w-4 h-4 text-slate-400" />
-                  <span className="line-clamp-2">{ca.counter_text}</span>
-                </div>
-                {ca.rebuttal_text && (
-                  <p className="text-sm text-slate-500 mt-1 ml-6">
-                    Response: {ca.rebuttal_text}
-                  </p>
-                )}
-              </div>
+                ca={ca}
+                idx={idx}
+                total={localCounterarguments.length}
+                reorderingId={reorderingCaId}
+                onReorder={handleReorderCounterargument}
+                onUpdated={(updated) =>
+                  setLocalCounterarguments((prev) =>
+                    prev.map((c) => (c.id === updated.id ? updated : c))
+                  )
+                }
+                onDeleted={(caId) =>
+                  setLocalCounterarguments((prev) => prev.filter((c) => c.id !== caId))
+                }
+              />
             ))}
           </div>
         ) : (

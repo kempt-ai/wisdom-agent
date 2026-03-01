@@ -56,9 +56,9 @@ Build structured, navigable arguments from your research. The Investigation Buil
 - Status tracking (ongoing, resolved, historical, superseded)
 - Evidence credibility metadata (source type, key quotes, key points)
 
-*Status: Core features complete. Counterarguments, reordering, and credibility assessment in progress.*
+*Status: Core features complete including counterarguments and reordering. Credibility assessment planned.*
 
-See [ARGUMENT_BUILDER_DESIGN.md](./ARGUMENT_BUILDER_DESIGN.md) for full specification.
+See [ARGUMENT\_BUILDER\_DESIGN.md][1] for full specification.
 
 ### Fact/Logic/Wisdom Checker
 
@@ -66,11 +66,11 @@ See [ARGUMENT_BUILDER_DESIGN.md](./ARGUMENT_BUILDER_DESIGN.md) for full specific
 
 Analyze any content across three dimensions:
 
-| Dimension | Question | What It Checks |
-|-----------|----------|----------------|
-| **Factual** | Is it True? | Verifies claims against web sources, fact-check databases |
-| **Logical** | Is it Reasonable? | Analyzes argument structure, identifies reasoning issues |
-| **Wisdom** | Does it Support Wisdom? | Evaluates whether content supports conditions for wisdom |
+| Dimension   | Question                | What It Checks                                            |
+| ----------- | ----------------------- | --------------------------------------------------------- |
+| **Factual** | Is it True?             | Verifies claims against web sources, fact-check databases |
+| **Logical** | Is it Reasonable?       | Analyzes argument structure, identifies reasoning issues  |
+| **Wisdom**  | Does it Support Wisdom? | Evaluates whether content supports conditions for wisdom  |
 
 ### Philosophy Framework
 
@@ -83,26 +83,26 @@ Built on **Something Deeperism** - a philosophical approach that:
 
 **The 7 Universal Values:**
 
-| Value | Description |
-|-------|-------------|
-| **Awareness** | Being present and attentive to what's actually happening |
-| **Honesty** | Truthfulness with self and others |
-| **Accuracy** | Precision in thought and expression |
-| **Competence** | Skillful action and understanding |
-| **Compassion** | Care for the suffering of others |
-| **Loving-kindness** | Active goodwill toward all beings |
-| **Joyful-sharing** | Generous spirit in community |
+| Value               | Description                                              |
+| ------------------- | -------------------------------------------------------- |
+| **Awareness**       | Being present and attentive to what's actually happening |
+| **Honesty**         | Truthfulness with self and others                        |
+| **Accuracy**        | Precision in thought and expression                      |
+| **Competence**      | Skillful action and understanding                        |
+| **Compassion**      | Care for the suffering of others                         |
+| **Loving-kindness** | Active goodwill toward all beings                        |
+| **Joyful-sharing**  | Generous spirit in community                             |
 
 ### Multi-LLM Support
 Supports multiple AI providers with transparent pricing:
 
-| Provider | Models | Best For |
-|----------|--------|----------|
-| **Anthropic** | Claude 3.5 Sonnet, Claude 3.5 Haiku, Claude 3 Opus | Nuanced reasoning, safety |
-| **OpenAI** | GPT-4o, GPT-4o Mini, GPT-4 Turbo | Versatility, speed |
-| **Google** | Gemini 2.0 Flash, Gemini 1.5 Pro | Cost-effective, large context |
-| **Nebius** | Llama 3.3 70B, DeepSeek V3, Mixtral | Budget-friendly |
-| **Local** | Ollama (Mistral, Llama, Phi-3) | Free, private, offline |
+| Provider      | Models                                             | Best For                      |
+| ------------- | -------------------------------------------------- | ----------------------------- |
+| **Anthropic** | Claude 3.5 Sonnet, Claude 3.5 Haiku, Claude 3 Opus | Nuanced reasoning, safety     |
+| **OpenAI**    | GPT-4o, GPT-4o Mini, GPT-4 Turbo                   | Versatility, speed            |
+| **Google**    | Gemini 2.0 Flash, Gemini 1.5 Pro                   | Cost-effective, large context |
+| **Nebius**    | Llama 3.3 70B, DeepSeek V3, Mixtral                | Budget-friendly               |
+| **Local**     | Ollama (Mistral, Llama, Phi-3)                     | Free, private, offline        |
 
 ### Budget Management
 - Set monthly spending limits
@@ -243,6 +243,8 @@ wisdom-agent/
 │       │       ├── ClaimEditor.tsx
 │       │       ├── EvidenceCard.tsx
 │       │       ├── EvidenceEditor.tsx
+│       │       ├── CounterargumentCard.tsx
+│       │       ├── CounterargumentEditor.tsx
 │       │       ├── KBResourcePicker.tsx
 │       │       └── InvestigationEditor.tsx
 │       └── lib/             # Utilities and API client
@@ -301,10 +303,10 @@ This is cosmetic and can be ignored.
   - KB integration (search, browse parses, auto-add)
   - Sub-investigation linking for hierarchical arguments
   - "View in parse" links for source traceability
+  - Counterarguments and rebuttals
+  - Claim and evidence reordering
 
 ### In Progress 🔄
-- **Counterarguments & Rebuttals** - Add objections and responses to claims
-- **Claim/Evidence reordering** - Drag or arrow-based reorganization
 - **Source credibility assessment** - User checklist + AI-assisted evaluation
 - Knowledge Base frontend polish
 - Session reflection integration across all activities
@@ -338,7 +340,7 @@ This is an open-source project welcoming contributions. Please:
 - **Check callers before callees** - Bug often in how something is called
 - **Minimal changes** - Fix the bug, don't rewrite the file
 - **One change, then test** - Don't batch modifications
-- **Preserve functionality** - Working code > clean code
+- **Preserve functionality** - Working code \> clean code
 
 ## 📄 License
 
@@ -347,10 +349,10 @@ This is an open-source project welcoming contributions. Please:
 ## 🙏 Acknowledgments
 
 Built with:
-- [FastAPI](https://fastapi.tiangolo.com/) - Backend framework
-- [Next.js](https://nextjs.org/) - Frontend framework
-- [Anthropic Claude](https://www.anthropic.com/) - Primary AI provider
-- [DuckDuckGo](https://duckduckgo.com/) - Web search
+- [FastAPI][2] - Backend framework
+- [Next.js][3] - Frontend framework
+- [Anthropic Claude][4] - Primary AI provider
+- [DuckDuckGo][5] - Web search
 - The wisdom traditions that inspire this work
 
 ---
@@ -362,3 +364,9 @@ Built with:
 - **Issues**: Use GitHub Issues for bug reports and feature requests
 - **Documentation**: Check `/docs` endpoint when backend is running
 - **API Docs**: Visit `http://localhost:8000/docs` for Swagger UI
+
+[1]:	./ARGUMENT_BUILDER_DESIGN.md
+[2]:	https://fastapi.tiangolo.com/
+[3]:	https://nextjs.org/
+[4]:	https://www.anthropic.com/
+[5]:	https://duckduckgo.com/
