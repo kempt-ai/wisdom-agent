@@ -8,6 +8,9 @@ import {
   AlertCircle, RefreshCw, Zap, ExternalLink, Copy, Check,
   ListTree, Loader2, DollarSign, ChevronDown
 } from 'lucide-react';
+import { argumentsApi, CredibilityVerdict, CredibilityChecklist } from '@/lib/arguments-api';
+import { CredibilityBadge } from '@/components/CredibilityBadge';
+import { CredibilityModal } from '@/components/CredibilityModal';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
@@ -94,6 +97,12 @@ export default function ResourceDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+
+  // Credibility state
+  const [credibilityVerdict, setCredibilityVerdict] = useState<CredibilityVerdict | null>(null);
+  const [credibilityChecklist, setCredibilityChecklist] = useState<CredibilityChecklist | null>(null);
+  const [credibilityNotes, setCredibilityNotes] = useState<string | null>(null);
+  const [credibilityModalOpen, setCredibilityModalOpen] = useState(false);
   
   // Parse-related state
   const [parses, setParses] = useState<ParseSummary[]>([]);
@@ -157,11 +166,36 @@ export default function ResourceDetailPage() {
 
       setResource(metaData);
       setContent(contentData);
+
+      // Load credibility assessment (non-blocking — columns may not exist yet)
+      try {
+        const cred = await argumentsApi.getResourceCredibility(resourceId);
+        setCredibilityVerdict(cred.credibility_verdict ?? null);
+        setCredibilityChecklist(cred.credibility_checklist ?? null);
+        setCredibilityNotes(cred.credibility_notes ?? null);
+      } catch {
+        // Silently ignore — credibility columns may not be migrated yet
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load resource');
     } finally {
       setLoading(false);
     }
+  }
+
+  async function handleSaveResourceCredibility(
+    verdict: CredibilityVerdict,
+    checklist: CredibilityChecklist,
+    notes: string | null
+  ) {
+    const updated = await argumentsApi.updateResourceCredibility(resourceId, {
+      credibility_verdict: verdict,
+      credibility_checklist: checklist,
+      credibility_notes: notes,
+    });
+    setCredibilityVerdict(updated.credibility_verdict ?? null);
+    setCredibilityChecklist(updated.credibility_checklist ?? null);
+    setCredibilityNotes(updated.credibility_notes ?? null);
   }
 
   async function copyContent() {
@@ -342,7 +376,7 @@ export default function ResourceDetailPage() {
         {/* Metadata Card - Compact */}
         <div className="bg-white rounded-lg border border-slate-200 p-4 mb-6">
           <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
-            <Link 
+            <Link
               href={`/knowledge/${resource.collection_id}`}
               className="text-indigo-600 hover:underline"
             >
@@ -355,7 +389,7 @@ export default function ResourceDetailPage() {
             {resource.source_url && (
               <>
                 <span className="text-slate-400">|</span>
-                <a 
+                <a
                   href={resource.source_url}
                   target="_blank"
                   rel="noopener noreferrer"
@@ -365,8 +399,24 @@ export default function ResourceDetailPage() {
                 </a>
               </>
             )}
+            <span className="text-slate-400">|</span>
+            <CredibilityBadge
+              verdict={credibilityVerdict}
+              onOpenAssessment={() => setCredibilityModalOpen(true)}
+            />
           </div>
         </div>
+
+        {/* Credibility Assessment Modal */}
+        <CredibilityModal
+          isOpen={credibilityModalOpen}
+          onClose={() => setCredibilityModalOpen(false)}
+          sourceLabel={resource.name}
+          initialVerdict={credibilityVerdict}
+          initialChecklist={credibilityChecklist}
+          initialNotes={credibilityNotes}
+          onSave={handleSaveResourceCredibility}
+        />
 
         {/* Existing Parses - PROMINENT */}
         {parses.length > 0 && (

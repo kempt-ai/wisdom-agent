@@ -1050,6 +1050,136 @@ async def get_knowledge_stats(
 
 
 # ============================================================================
+# CREDIBILITY ASSESSMENT (Phase 7)
+# ============================================================================
+
+class ResourceCredibilityUpdate(BaseModel):
+    """Credibility assessment payload for a KB resource."""
+    credibility_verdict: str  # "trustworthy" | "possible_issues" | "known_issues"
+    credibility_checklist: dict
+    credibility_notes: Optional[str] = None
+
+
+class ResourceCredibility(BaseModel):
+    """Credibility state for a KB resource."""
+    resource_id: int
+    credibility_verdict: Optional[str] = None
+    credibility_checklist: Optional[dict] = None
+    credibility_notes: Optional[str] = None
+    credibility_assessed_at: Optional[str] = None
+
+
+@router.get("/resources/{resource_id}/credibility", response_model=ResourceCredibility)
+async def get_resource_credibility(
+    resource_id: int,
+    user_id: int = Depends(get_user_id),
+):
+    """Get the credibility assessment for a KB resource."""
+    try:
+        from backend.database.connection import SessionLocal
+        import json
+        db = SessionLocal()
+        try:
+            from sqlalchemy import text
+            row = db.execute(
+                text("""
+                    SELECT credibility_verdict, credibility_checklist,
+                           credibility_notes, credibility_assessed_at
+                    FROM knowledge_resources
+                    WHERE id = :id AND user_id = :user_id
+                """),
+                {"id": resource_id, "user_id": user_id}
+            ).fetchone()
+            if not row:
+                raise HTTPException(status_code=404, detail=f"Resource {resource_id} not found")
+            checklist = row[1]
+            if isinstance(checklist, str):
+                try:
+                    checklist = json.loads(checklist)
+                except Exception:
+                    checklist = None
+            assessed_at = row[3]
+            if assessed_at is not None and not isinstance(assessed_at, str):
+                assessed_at = assessed_at.isoformat()
+            return ResourceCredibility(
+                resource_id=resource_id,
+                credibility_verdict=row[0],
+                credibility_checklist=checklist,
+                credibility_notes=row[2],
+                credibility_assessed_at=assessed_at,
+            )
+        finally:
+            db.close()
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get resource credibility: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.patch("/resources/{resource_id}/credibility", response_model=ResourceCredibility)
+async def update_resource_credibility(
+    resource_id: int,
+    data: ResourceCredibilityUpdate,
+    user_id: int = Depends(get_user_id),
+):
+    """
+    Save a credibility assessment for a KB resource.
+
+    Accepts verdict, checklist state, and optional notes.
+    Sets credibility_assessed_at to the current timestamp.
+    """
+    try:
+        from backend.database.connection import SessionLocal
+        from datetime import datetime
+        import json
+        db = SessionLocal()
+        try:
+            from sqlalchemy import text
+            existing = db.execute(
+                text("SELECT id FROM knowledge_resources WHERE id = :id AND user_id = :user_id"),
+                {"id": resource_id, "user_id": user_id}
+            ).fetchone()
+            if not existing:
+                raise HTTPException(status_code=404, detail=f"Resource {resource_id} not found")
+
+            now = datetime.utcnow()
+            db.execute(
+                text("""
+                    UPDATE knowledge_resources SET
+                        credibility_verdict = :verdict,
+                        credibility_checklist = :checklist,
+                        credibility_notes = :notes,
+                        credibility_assessed_at = :assessed_at
+                    WHERE id = :id AND user_id = :user_id
+                """),
+                {
+                    "verdict": data.credibility_verdict,
+                    "checklist": json.dumps(data.credibility_checklist),
+                    "notes": data.credibility_notes,
+                    "assessed_at": now,
+                    "id": resource_id,
+                    "user_id": user_id,
+                }
+            )
+            db.commit()
+            return ResourceCredibility(
+                resource_id=resource_id,
+                credibility_verdict=data.credibility_verdict,
+                credibility_checklist=data.credibility_checklist,
+                credibility_notes=data.credibility_notes,
+                credibility_assessed_at=now.isoformat(),
+            )
+        finally:
+            db.close()
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to update resource credibility: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
 # HEALTH CHECK
 # ============================================================================
 

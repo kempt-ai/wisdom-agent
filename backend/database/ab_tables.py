@@ -441,3 +441,39 @@ def migrate_add_supporting_quotes(connection, use_postgres: bool = True):
         # Ignore "already exists" errors
         if 'already exists' not in str(e).lower() and 'duplicate' not in str(e).lower():
             print(f"Warning: Could not add supporting_quotes column: {e}")
+
+
+def migrate_add_credibility_fields(connection, use_postgres: bool = True):
+    """Add credibility assessment columns to ab_evidence (Phase 7)."""
+    from sqlalchemy import text
+
+    columns_to_add = [
+        ("credibility_verdict", "VARCHAR(50)" if use_postgres else "VARCHAR(50)"),
+        ("credibility_checklist", "JSONB" if use_postgres else "TEXT"),
+        ("credibility_notes", "TEXT"),
+        ("credibility_assessed_at", "TIMESTAMP"),
+    ]
+
+    for col_name, col_type in columns_to_add:
+        try:
+            if use_postgres:
+                connection.execute(text(
+                    f"ALTER TABLE ab_evidence ADD COLUMN IF NOT EXISTS {col_name} {col_type}"
+                ))
+            else:
+                result = connection.execute(text("PRAGMA table_info(ab_evidence)")).fetchall()
+                existing = [row[1] for row in result]
+                if col_name not in existing:
+                    connection.execute(text(
+                        f"ALTER TABLE ab_evidence ADD COLUMN {col_name} {col_type}"
+                    ))
+            connection.commit()
+        except Exception as e:
+            try:
+                connection.rollback()
+            except Exception:
+                pass
+            if 'already exists' not in str(e).lower() and 'duplicate' not in str(e).lower():
+                print(f"Warning: Could not add {col_name} to ab_evidence: {e}")
+
+    print("Credibility fields added/verified on ab_evidence")

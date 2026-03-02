@@ -13,10 +13,14 @@ import {
   MessageSquare,
   GitBranch,
 } from 'lucide-react';
-import { ABEvidence, SupportingQuote } from '@/lib/arguments-api';
+import { ABEvidence, SupportingQuote, CredibilityVerdict, CredibilityChecklist, argumentsApi } from '@/lib/arguments-api';
+import { CredibilityBadge } from '@/components/CredibilityBadge';
+import { CredibilityModal } from '@/components/CredibilityModal';
 
 interface EvidenceCardProps {
   evidence: ABEvidence;
+  /** Called when credibility is saved so the parent can update local state */
+  onUpdate?: (updated: ABEvidence) => void;
 }
 
 /**
@@ -93,8 +97,16 @@ function SupportingQuotesSection({ quotes }: { quotes: SupportingQuote[] }) {
 /**
  * Displays a single evidence item with source info, type badge,
  * key quote, key point, supporting quotes, and links to source / KB resource.
+ * Includes a credibility badge that opens an assessment modal.
  */
-export function EvidenceCard({ evidence }: EvidenceCardProps) {
+export function EvidenceCard({ evidence, onUpdate }: EvidenceCardProps) {
+  const [modalOpen, setModalOpen] = useState(false);
+  const [localVerdict, setLocalVerdict] = useState<CredibilityVerdict | null>(
+    evidence.credibility_verdict ?? null
+  );
+  const [localChecklist, setLocalChecklist] = useState(evidence.credibility_checklist ?? null);
+  const [localNotes, setLocalNotes] = useState(evidence.credibility_notes ?? null);
+
   const sourceType = evidence.source_type
     ? sourceTypeConfig[evidence.source_type] || {
         label: evidence.source_type.replace(/_/g, ' '),
@@ -112,84 +124,124 @@ export function EvidenceCard({ evidence }: EvidenceCardProps) {
     ? `/arguments/outline/${parseAnchor.parsed_resource_id}?highlight=${encodeURIComponent(parseAnchor.outline_node_id)}`
     : null;
 
+  async function handleSaveCredibility(
+    verdict: CredibilityVerdict,
+    checklist: CredibilityChecklist,
+    notes: string | null
+  ) {
+    const updated = await argumentsApi.updateEvidenceCredibility(evidence.id, {
+      credibility_verdict: verdict,
+      credibility_checklist: checklist,
+      credibility_notes: notes,
+    });
+    setLocalVerdict(updated.credibility_verdict ?? null);
+    setLocalChecklist(updated.credibility_checklist ?? null);
+    setLocalNotes(updated.credibility_notes ?? null);
+    onUpdate?.(updated);
+  }
+
+  // Subtle red left border for known_issues
+  const knownIssuesBorder = localVerdict === 'known_issues'
+    ? 'border-l-4 border-l-red-400'
+    : '';
+
   return (
-    <div className="bg-white rounded-lg border border-slate-200 p-4 hover:border-slate-300 transition-colors">
-      {/* Header: icon + title + source type badge */}
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex items-start gap-2 min-w-0">
-          <FileText className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
-          <span className="text-sm font-medium text-slate-800 leading-snug">
-            {evidence.source_title || 'Untitled source'}
-          </span>
+    <>
+      <div className={`bg-white rounded-lg border border-slate-200 p-4 hover:border-slate-300 transition-colors ${knownIssuesBorder}`}>
+        {/* Header: icon + title + source type badge */}
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-start gap-2 min-w-0">
+            <FileText className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
+            <span className="text-sm font-medium text-slate-800 leading-snug">
+              {evidence.source_title || 'Untitled source'}
+            </span>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <CredibilityBadge
+              verdict={localVerdict}
+              onOpenAssessment={() => setModalOpen(true)}
+            />
+            {sourceType && (
+              <span
+                className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border ${sourceType.bg} ${sourceType.color}`}
+              >
+                {sourceType.label}
+              </span>
+            )}
+          </div>
         </div>
-        {sourceType && (
-          <span
-            className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium border shrink-0 ${sourceType.bg} ${sourceType.color}`}
-          >
-            {sourceType.label}
-          </span>
+
+        {/* Key quote */}
+        {evidence.key_quote && (
+          <div className="mt-3 flex gap-2">
+            <Quote className="w-3.5 h-3.5 text-slate-300 shrink-0 mt-0.5" />
+            <p className="text-sm text-slate-600 italic leading-relaxed">
+              {evidence.key_quote}
+            </p>
+          </div>
+        )}
+
+        {/* Supporting quotes (expandable) */}
+        {evidence.supporting_quotes && evidence.supporting_quotes.length > 0 && (
+          <SupportingQuotesSection quotes={evidence.supporting_quotes} />
+        )}
+
+        {/* Key point */}
+        {evidence.key_point && (
+          <div className="mt-2 flex gap-2">
+            <Lightbulb className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
+            <p className="text-sm text-slate-700 leading-relaxed">
+              {evidence.key_point}
+            </p>
+          </div>
+        )}
+
+        {/* Action links */}
+        {(evidence.source_url || evidence.kb_resource_id || viewInParseHref) && (
+          <div className="mt-3 pt-3 border-t border-slate-100 flex items-center gap-4">
+            {evidence.source_url && (
+              <a
+                href={evidence.source_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-800 transition-colors"
+              >
+                <ExternalLink className="w-3 h-3" />
+                View source
+              </a>
+            )}
+            {evidence.kb_resource_id && (
+              <a
+                href={`/knowledge/resources/${evidence.kb_resource_id}`}
+                className="inline-flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-800 transition-colors"
+              >
+                <BookOpen className="w-3 h-3" />
+                View in KB
+              </a>
+            )}
+            {viewInParseHref && (
+              <a
+                href={viewInParseHref}
+                className="inline-flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-800 transition-colors"
+              >
+                <GitBranch className="w-3 h-3" />
+                View in parse
+              </a>
+            )}
+          </div>
         )}
       </div>
 
-      {/* Key quote */}
-      {evidence.key_quote && (
-        <div className="mt-3 flex gap-2">
-          <Quote className="w-3.5 h-3.5 text-slate-300 shrink-0 mt-0.5" />
-          <p className="text-sm text-slate-600 italic leading-relaxed">
-            {evidence.key_quote}
-          </p>
-        </div>
-      )}
-
-      {/* Supporting quotes (expandable) */}
-      {evidence.supporting_quotes && evidence.supporting_quotes.length > 0 && (
-        <SupportingQuotesSection quotes={evidence.supporting_quotes} />
-      )}
-
-      {/* Key point */}
-      {evidence.key_point && (
-        <div className="mt-2 flex gap-2">
-          <Lightbulb className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
-          <p className="text-sm text-slate-700 leading-relaxed">
-            {evidence.key_point}
-          </p>
-        </div>
-      )}
-
-      {/* Action links */}
-      {(evidence.source_url || evidence.kb_resource_id || viewInParseHref) && (
-        <div className="mt-3 pt-3 border-t border-slate-100 flex items-center gap-4">
-          {evidence.source_url && (
-            <a
-              href={evidence.source_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-800 transition-colors"
-            >
-              <ExternalLink className="w-3 h-3" />
-              View source
-            </a>
-          )}
-          {evidence.kb_resource_id && (
-            <a
-              href={`/knowledge/resources/${evidence.kb_resource_id}`}
-              className="inline-flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-800 transition-colors"
-            >
-              <BookOpen className="w-3 h-3" />
-              View in KB
-            </a>
-          )}
-          {viewInParseHref && (
-            <a
-              href={viewInParseHref}
-              className="inline-flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-800 transition-colors"
-            >
-              <GitBranch className="w-3 h-3" />
-              View in parse
-            </a>
-          )}
-        </div>
-      )}
-    </div>
+      {/* Credibility assessment modal */}
+      <CredibilityModal
+        isOpen={modalOpen}
+        onClose={() => setModalOpen(false)}
+        sourceLabel={evidence.source_title || evidence.source_url}
+        initialVerdict={localVerdict}
+        initialChecklist={localChecklist}
+        initialNotes={localNotes}
+        onSave={handleSaveCredibility}
+      />
+    </>
   );
 }

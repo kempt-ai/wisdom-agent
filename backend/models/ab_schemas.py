@@ -243,6 +243,18 @@ class ABEvidence(BaseModel):
     source_anchor_type: Optional[str] = None
     source_anchor_data: Optional[Dict[str, Any]] = None
     supporting_quotes: Optional[List[SupportingQuote]] = None
+    # Credibility assessment (Phase 7)
+    credibility_verdict: Optional[str] = None  # "trustworthy" | "possible_issues" | "known_issues"
+    credibility_checklist: Optional[Dict[str, bool]] = None
+    credibility_notes: Optional[str] = None
+    credibility_assessed_at: Optional[datetime] = None
+
+
+class CredibilityUpdate(BaseModel):
+    """Update credibility assessment for an evidence item or KB resource"""
+    credibility_verdict: str  # "trustworthy" | "possible_issues" | "known_issues"
+    credibility_checklist: Dict[str, bool]
+    credibility_notes: Optional[str] = None
 
 
 # ============================================================================

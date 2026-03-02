@@ -25,6 +25,7 @@ from backend.models.ab_schemas import (
     SourceCredibility, SourceCredibilityCreate,
     EvidenceCredibility, EvidenceCredibilityCreate,
     ChangelogEntry, LinkedInvestigationRef,
+    CredibilityUpdate,
 )
 
 logger = logging.getLogger(__name__)
@@ -996,6 +997,10 @@ class ABService:
                 source_anchor_type=e.source_anchor_type,
                 source_anchor_data=_parse_json_field(e.source_anchor_data),
                 supporting_quotes=_parse_json_field(getattr(e, 'supporting_quotes', None)),
+                credibility_verdict=getattr(e, 'credibility_verdict', None),
+                credibility_checklist=_parse_json_field(getattr(e, 'credibility_checklist', None)),
+                credibility_notes=getattr(e, 'credibility_notes', None),
+                credibility_assessed_at=getattr(e, 'credibility_assessed_at', None),
             )
             for e in rows
         ]
@@ -1021,7 +1026,43 @@ class ABService:
             source_anchor_type=row.source_anchor_type,
             source_anchor_data=_parse_json_field(row.source_anchor_data),
             supporting_quotes=_parse_json_field(getattr(row, 'supporting_quotes', None)),
+            credibility_verdict=getattr(row, 'credibility_verdict', None),
+            credibility_checklist=_parse_json_field(getattr(row, 'credibility_checklist', None)),
+            credibility_notes=getattr(row, 'credibility_notes', None),
+            credibility_assessed_at=getattr(row, 'credibility_assessed_at', None),
         )
+
+    async def update_evidence_credibility(self, evidence_id: int, data: CredibilityUpdate) -> ABEvidence:
+        """Update credibility assessment for an evidence item."""
+        from sqlalchemy import text
+
+        existing = self.db.execute(
+            text("SELECT id FROM ab_evidence WHERE id = :id"),
+            {"id": evidence_id}
+        ).fetchone()
+        if not existing:
+            raise EvidenceNotFoundError(f"Evidence {evidence_id} not found")
+
+        self.db.execute(
+            text("""
+                UPDATE ab_evidence SET
+                    credibility_verdict = :verdict,
+                    credibility_checklist = :checklist,
+                    credibility_notes = :notes,
+                    credibility_assessed_at = :assessed_at
+                WHERE id = :id
+            """),
+            {
+                "verdict": data.credibility_verdict,
+                "checklist": json.dumps(data.credibility_checklist),
+                "notes": data.credibility_notes,
+                "assessed_at": datetime.utcnow(),
+                "id": evidence_id,
+            }
+        )
+        self.db.commit()
+
+        return await self._get_evidence_by_id(evidence_id)
 
     async def _get_counterarguments_for_claim(self, claim_id: int) -> List[Counterargument]:
         """Get all counterarguments for a claim."""

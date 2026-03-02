@@ -100,13 +100,19 @@ async def lifespan(app: FastAPI):
 
     # Create Investigation Builder (AB) tables
     try:
-        from backend.database.ab_tables import create_ab_tables, migrate_add_supporting_quotes, migrate_add_linked_investigation
+        from backend.database.ab_tables import (
+            create_ab_tables, migrate_add_supporting_quotes,
+            migrate_add_linked_investigation, migrate_add_credibility_fields,
+        )
+        from backend.database.knowledge_tables import migrate_add_resource_credibility_fields
 
         with engine.connect() as conn:
             use_postgres = 'postgres' in str(engine.url).lower()
             create_ab_tables(conn, use_postgres=use_postgres)
             migrate_add_supporting_quotes(conn, use_postgres=use_postgres)
             migrate_add_linked_investigation(conn, use_postgres=use_postgres)
+            migrate_add_credibility_fields(conn, use_postgres=use_postgres)
+            migrate_add_resource_credibility_fields(conn, use_postgres=use_postgres)
             conn.commit()
         print("✓ Investigation Builder tables verified/created")
     except ImportError:

@@ -26,6 +26,8 @@ from backend.models.ab_schemas import (
     ABClaim, ABClaimCreate, ABClaimUpdate,
     # Evidence
     ABEvidence, ABEvidenceCreate, ABEvidenceUpdate,
+    # Credibility
+    CredibilityUpdate,
     # Counterarguments
     Counterargument, CounterargumentCreate, CounterargumentUpdate,
 )
@@ -339,6 +341,24 @@ async def delete_evidence(evidence_id: int):
         raise HTTPException(status_code=404, detail=f"Evidence {evidence_id} not found")
     except Exception as e:
         logger.error(f"Failed to delete evidence: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.patch("/evidence/{evidence_id}/credibility", response_model=ABEvidence)
+async def update_evidence_credibility(evidence_id: int, data: CredibilityUpdate):
+    """
+    Save a credibility assessment for an evidence item.
+
+    Accepts the verdict, full checklist state, and optional notes.
+    Sets credibility_assessed_at to the current timestamp.
+    """
+    try:
+        service = get_ab_service()
+        return await service.update_evidence_credibility(evidence_id, data)
+    except EvidenceNotFoundError:
+        raise HTTPException(status_code=404, detail=f"Evidence {evidence_id} not found")
+    except Exception as e:
+        logger.error(f"Failed to update evidence credibility: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

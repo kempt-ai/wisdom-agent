@@ -108,6 +108,17 @@ export interface SupportingQuote {
   outline_node_id?: string;  // e.g. "evidence-98"
 }
 
+export type CredibilityVerdict = 'trustworthy' | 'possible_issues' | 'known_issues';
+
+export interface CredibilityChecklist {
+  publisher_identified: boolean;
+  publisher_credible: boolean;
+  no_clear_bias: boolean;
+  primary_or_traced: boolean;
+  independently_corroborated: boolean;
+  evidence_supports_claim: boolean;
+}
+
 export interface ABEvidence {
   id: number;
   claim_id: number;
@@ -122,6 +133,19 @@ export interface ABEvidence {
   source_anchor_type: string | null;
   source_anchor_data: Record<string, any> | null;
   supporting_quotes: SupportingQuote[] | null;
+  // Credibility assessment (Phase 7)
+  credibility_verdict: CredibilityVerdict | null;
+  credibility_checklist: CredibilityChecklist | null;
+  credibility_notes: string | null;
+  credibility_assessed_at: string | null;
+}
+
+export interface ResourceCredibility {
+  resource_id: number;
+  credibility_verdict: CredibilityVerdict | null;
+  credibility_checklist: CredibilityChecklist | null;
+  credibility_notes: string | null;
+  credibility_assessed_at: string | null;
 }
 
 export interface Counterargument {
@@ -368,6 +392,34 @@ export const argumentsApi = {
     return fetchAPI<ABEvidence>(
       `${AB_PREFIX}/evidence/${evidenceId}`,
       { method: 'PUT', body: JSON.stringify(data) }
+    );
+  },
+
+  async updateEvidenceCredibility(evidenceId: number, data: {
+    credibility_verdict: CredibilityVerdict;
+    credibility_checklist: CredibilityChecklist;
+    credibility_notes?: string | null;
+  }): Promise<ABEvidence> {
+    return fetchAPI<ABEvidence>(
+      `${AB_PREFIX}/evidence/${evidenceId}/credibility`,
+      { method: 'PATCH', body: JSON.stringify(data) }
+    );
+  },
+
+  async getResourceCredibility(resourceId: number): Promise<ResourceCredibility> {
+    return fetchAPI<ResourceCredibility>(
+      `/api/knowledge/resources/${resourceId}/credibility`
+    );
+  },
+
+  async updateResourceCredibility(resourceId: number, data: {
+    credibility_verdict: CredibilityVerdict;
+    credibility_checklist: CredibilityChecklist;
+    credibility_notes?: string | null;
+  }): Promise<ResourceCredibility> {
+    return fetchAPI<ResourceCredibility>(
+      `/api/knowledge/resources/${resourceId}/credibility`,
+      { method: 'PATCH', body: JSON.stringify(data) }
     );
   },
 
